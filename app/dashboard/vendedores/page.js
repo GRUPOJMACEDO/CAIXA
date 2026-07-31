@@ -16,8 +16,14 @@ function inicioMes() {
 const MEDALHA = ["text-gold", "text-prata", "text-bronze"];
 const CARGOS_GESTAO = [CARGOS.SUPERVISAO, CARGOS.GERENCIA, CARGOS.ADMINISTRADOR, CARGOS.DIRETOR];
 
+const ABAS = [
+  { id: "orcamentos", rotulo: "Orçamentos", view: "vw_dashboard_vendedores_ow", categoria: null },
+  { id: "acessorios", rotulo: "Acessórios", view: "vw_dashboard_vendedores", categoria: "Acessório" },
+];
+
 function ConteudoVendedores() {
   const { usuario, unidades } = useSessao();
+  const [aba, setAba] = useState("orcamentos");
   const [linhas, setLinhas] = useState([]);
   const [carregando, setCarregando] = useState(true);
   const [detalhe, setDetalhe] = useState(null);
@@ -25,18 +31,22 @@ function ConteudoVendedores() {
   const [carregandoDetalhe, setCarregandoDetalhe] = useState(false);
 
   const idsAutorizados = new Set(unidades.map((u) => u.id));
+  const abaAtual = ABAS.find((a) => a.id === aba);
 
   useEffect(() => {
-    (async () => {
-      const { data } = await supabase.from("vw_dashboard_vendedores").select("*");
-      const lista = (data || [])
-        .map((v) => ({ ...v, falta: Number(v.orcamento_aprovado) - Number(v.valor_pago), premio: Number(v.valor_pago) * 0.05 }))
-        .filter((v) => Number(v.valor_pago) > 0 || Number(v.qtd_os) > 0)
-        .sort((a, b) => Number(b.valor_pago) - Number(a.valor_pago));
-      setLinhas(lista);
-      setCarregando(false);
-    })();
-  }, []);
+    setCarregando(true);
+    supabase
+      .from(abaAtual.view)
+      .select("*")
+      .then(({ data }) => {
+        const lista = (data || [])
+          .map((v) => ({ ...v, falta: Number(v.orcamento_aprovado) - Number(v.valor_pago), premio: Number(v.valor_pago) * 0.05 }))
+          .filter((v) => Number(v.valor_pago) > 0 || Number(v.qtd_os) > 0)
+          .sort((a, b) => Number(b.valor_pago) - Number(a.valor_pago));
+        setLinhas(lista);
+        setCarregando(false);
+      });
+  }, [aba]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const totalOrcamento = linhas.reduce((s, l) => s + Number(l.orcamento_aprovado), 0);
   const totalPago = linhas.reduce((s, l) => s + Number(l.valor_pago), 0);
@@ -52,25 +62,47 @@ function ConteudoVendedores() {
     setDetalhe({ titulo: linha.nome_completo, unidadeId: linha.unidade_id, usuarioId: linha.usuario_id });
     if (!podeVerDetalhe(linha)) return;
     setCarregandoDetalhe(true);
-    const { data: categoriaAcessorio } = await supabase.from("categorias").select("id").eq("nome", "Acessório").single();
-    const { data } = await supabase
+    let query = supabase
       .from("lancamentos")
       .select("id, data, numero_os, orcamento_aprovado, valor_pago, tipos_servico(nome)")
       .eq("unidade_id", linha.unidade_id)
       .eq("atendente_id", linha.usuario_id)
-      .eq("categoria_id", categoriaAcessorio?.id)
       .gte("data", inicioMes())
       .order("data", { ascending: false });
+
+    if (abaAtual.categoria) {
+      const { data: cat } = await supabase.from("categorias").select("id").eq("nome", abaAtual.categoria).single();
+      query = query.eq("categoria_id", cat?.id);
+    } else {
+      const { data: cat } = await supabase.from("categorias").select("id").eq("nome", "Acessório").single();
+      if (cat) query = query.neq("categoria_id", cat.id);
+    }
+
+    const { data } = await query;
     setLancamentosDetalhe(data || []);
     setCarregandoDetalhe(false);
   }
 
   return (
     <div className="max-w-5xl">
-      <div className="mb-6">
+      <div className="mb-5">
         <p className="text-xs uppercase tracking-wider text-muted mb-1">Dashboard</p>
-        <h1 className="font-display text-2xl font-semibold text-ink">Vendedores — Acessórios de {mesReferenciaLabel(inicioMes())}</h1>
-        <p className="text-sm text-muted mt-1">Ranking de vendas de acessórios por atendente, de todas as unidades, com prêmio de 5%.</p>
+        <h1 className="font-display text-2xl font-semibold text-ink">Vendedores de {mesReferenciaLabel(inicioMes())}</h1>
+        <p className="text-sm text-muted mt-1">Ranking por atendente, de todas as unidades.</p>
+      </div>
+
+      <div className="flex gap-2 mb-5">
+        {ABAS.map((a) => (
+          <button
+            key={a.id}
+            onClick={() => setAba(a.id)}
+            className={`px-4 py-1.5 rounded-full text-sm transition ${
+              aba === a.id ? "bg-gold text-white font-medium" : "bg-white border border-line text-muted hover:border-gold/50"
+            }`}
+          >
+            {a.rotulo}
+          </button>
+        ))}
       </div>
 
       <div className="grid grid-cols-5 gap-3 mb-6">
@@ -129,7 +161,7 @@ function ConteudoVendedores() {
           </thead>
           <tbody>
             {carregando && <tr><td className="p-4 text-muted" colSpan={5}>Carregando…</td></tr>}
-            {!carregando && linhas.length === 0 && <tr><td className="p-4 text-muted" colSpan={5}>Nenhuma venda de acessório no mês.</td></tr>}
+            {!carregando && linhas.length === 0 && <tr><td className="p-4 text-muted" colSpan={5}>Nenhuma venda no período.</td></tr>}
             {linhas.map((l, i) => (
               <tr key={`${l.usuario_id}-${l.unidade_id}`} className="border-t border-line hover:bg-canvas/60 cursor-pointer" onClick={() => abrirDetalhe(l)}>
                 <td className="p-3">
@@ -150,7 +182,7 @@ function ConteudoVendedores() {
       </div>
 
       {detalhe && (
-        <Modal titulo={detalhe.titulo} subtitulo={`${lancamentosDetalhe.length} lançamento(s) de acessório no mês`} onFechar={() => setDetalhe(null)} largura="max-w-3xl">
+        <Modal titulo={detalhe.titulo} subtitulo={`${lancamentosDetalhe.length} lançamento(s) — ${abaAtual.rotulo}`} onFechar={() => setDetalhe(null)} largura="max-w-3xl">
           {!podeVerDetalhe({ unidade_id: detalhe.unidadeId, usuario_id: detalhe.usuarioId }) ? (
             <div className="flex flex-col items-center text-center py-6 text-muted">
               <Lock size={22} className="mb-2 opacity-60" />
