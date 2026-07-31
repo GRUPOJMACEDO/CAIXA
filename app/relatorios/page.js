@@ -1,11 +1,12 @@
 "use client";
 import { useEffect, useState } from "react";
-import { FileDown, Check, Store } from "lucide-react";
+import { FileDown, Check, Store, CalendarDays, Wallet, Hash } from "lucide-react";
 import AppShell from "../../components/AppShell";
 import Modal from "../../components/Modal";
 import { supabase } from "../../lib/supabaseClient";
 import { useSessao } from "../../lib/SessaoContext";
 import { podeVerTodasUnidades } from "../../lib/permissions";
+import { iconeCategoria } from "../../lib/iconesCategoria";
 import { formatarDataBR, formatarMoedaSemSimbolo } from "../../lib/formato";
 
 function inicioMes() {
@@ -78,7 +79,7 @@ function Conteudo() {
   const totalPago = resultados.reduce((s, r) => s + Number(r.valor_pago), 0);
 
   return (
-    <div className="max-w-5xl">
+    <div className="max-w-6xl">
       <div className="mb-6">
         <p className="text-xs uppercase tracking-wider text-muted mb-1">Operação</p>
         <h1 className="font-display text-2xl font-semibold text-ink">Relatórios</h1>
@@ -89,15 +90,15 @@ function Conteudo() {
 
       <div className="card p-4 grid grid-cols-4 gap-3 mb-6 items-end">
         <div>
-          <label className="field-label">Data de</label>
+          <label className="field-label flex items-center gap-1.5"><CalendarDays size={12} className="text-muted" /> Data de</label>
           <input className="field-input" type="date" value={dataDe} onChange={(e) => setDataDe(e.target.value)} />
         </div>
         <div>
-          <label className="field-label">Data até</label>
+          <label className="field-label flex items-center gap-1.5"><CalendarDays size={12} className="text-muted" /> Data até</label>
           <input className="field-input" type="date" value={dataAte} onChange={(e) => setDataAte(e.target.value)} />
         </div>
         <div>
-          <label className="field-label">Unidades</label>
+          <label className="field-label flex items-center gap-1.5"><Store size={12} className="text-muted" /> Unidades</label>
           <button type="button" className="btn w-full flex items-center justify-center gap-1.5" onClick={() => setPopupUnidades(true)}>
             <Store size={14} /> {unidadesSelecionadas.length} selecionada(s)
           </button>
@@ -109,39 +110,65 @@ function Conteudo() {
 
       {resultados.length > 0 && (
         <>
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-sm text-muted">{resultados.length} lançamento(s) · total pago: <span className="font-mono-num text-ink font-medium">R$ {formatarMoedaSemSimbolo(totalPago)}</span></p>
-            <button className="btn flex items-center gap-1.5" onClick={exportar}>
-              <FileDown size={14} /> Exportar para Excel (CSV)
-            </button>
+          <div className="grid grid-cols-3 gap-3 mb-4">
+            <div className="card overflow-hidden">
+              <div className="h-1.5 bg-[#3F8A5C]" />
+              <div className="p-4">
+                <div className="w-8 h-8 rounded-lg bg-[#3F8A5C]/10 flex items-center justify-center text-[#3F8A5C] mb-2"><Wallet size={16} /></div>
+                <p className="text-xs text-muted mb-1">Total pago no período</p>
+                <p className="font-mono-num text-xl font-semibold text-ink">R$ {formatarMoedaSemSimbolo(totalPago)}</p>
+              </div>
+            </div>
+            <div className="card overflow-hidden">
+              <div className="h-1.5 bg-[#7C819C]" />
+              <div className="p-4">
+                <div className="w-8 h-8 rounded-lg bg-[#7C819C]/10 flex items-center justify-center text-[#7C819C] mb-2"><Hash size={16} /></div>
+                <p className="text-xs text-muted mb-1">Lançamentos encontrados</p>
+                <p className="font-mono-num text-xl font-semibold text-ink">{resultados.length}</p>
+              </div>
+            </div>
+            <div className="card overflow-hidden flex items-center justify-end p-4">
+              <button className="btn flex items-center gap-1.5" onClick={exportar}>
+                <FileDown size={14} /> Exportar para Excel (CSV)
+              </button>
+            </div>
           </div>
-          <div className="card overflow-hidden overflow-x-auto">
+
+          <div className="card overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-xs uppercase tracking-wider text-muted border-b border-line whitespace-nowrap">
-                  <td className="p-3">Data</td>
-                  <td className="p-3">Unidade</td>
-                  <td className="p-3">Nº OS</td>
+                <tr className="text-xs uppercase tracking-wider text-muted border-b border-line">
+                  <td className="p-3 whitespace-nowrap">Data</td>
+                  <td className="p-3 whitespace-nowrap">Unidade</td>
+                  <td className="p-3 whitespace-nowrap">Nº OS</td>
                   <td className="p-3">Tipo de serviço</td>
-                  <td className="p-3 text-right">Orçamento</td>
-                  <td className="p-3 text-right">Pago</td>
-                  <td className="p-3">Forma pgto.</td>
+                  <td className="p-3 text-right whitespace-nowrap">Orçamento</td>
+                  <td className="p-3 text-right whitespace-nowrap">Pago</td>
+                  <td className="p-3 whitespace-nowrap">Forma pgto.</td>
                   <td className="p-3">Atendente</td>
                 </tr>
               </thead>
               <tbody>
-                {resultados.slice(0, 200).map((r) => (
-                  <tr key={r.id} className="border-t border-line whitespace-nowrap">
-                    <td className="p-3">{formatarDataBR(r.data)}</td>
-                    <td className="p-3">{r.unidades?.nome}</td>
-                    <td className="p-3 font-mono-num">{r.numero_os}</td>
-                    <td className="p-3">{r.tipos_servico?.nome}</td>
-                    <td className="p-3 text-right font-mono-num">R$ {formatarMoedaSemSimbolo(r.orcamento_aprovado)}</td>
-                    <td className="p-3 text-right font-mono-num font-medium">R$ {formatarMoedaSemSimbolo(r.valor_pago)}</td>
-                    <td className="p-3">{r.forma_pagamento}</td>
-                    <td className="p-3">{r.atendente?.nome_completo}</td>
-                  </tr>
-                ))}
+                {resultados.slice(0, 200).map((r) => {
+                  const Icone = iconeCategoria(r.categorias?.nome);
+                  return (
+                    <tr key={r.id} className="border-t border-line">
+                      <td className="p-3 whitespace-nowrap">{formatarDataBR(r.data)}</td>
+                      <td className="p-3 whitespace-nowrap max-w-[160px] truncate">{r.unidades?.nome}</td>
+                      <td className="p-3 font-mono-num whitespace-nowrap">{r.numero_os}</td>
+                      <td className="p-3 max-w-[220px] truncate">
+                        <span className="inline-flex items-center gap-1.5">
+                          <Icone size={13} className="text-muted shrink-0" />
+                          {r.tipos_servico?.nome}
+                        </span>
+                      </td>
+                      <td className="p-3 text-right font-mono-num whitespace-nowrap">R$ {formatarMoedaSemSimbolo(r.orcamento_aprovado)}</td>
+                      <td className="p-3 text-right font-mono-num font-medium whitespace-nowrap">R$ {formatarMoedaSemSimbolo(r.valor_pago)}</td>
+                      <td className="p-3 whitespace-nowrap">{r.forma_pagamento}</td>
+                      <td className="p-3 max-w-[160px] truncate">{r.atendente?.nome_completo}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
             {resultados.length > 200 && (

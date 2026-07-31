@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import AppShell from "../../../components/AppShell";
 import Modal from "../../../components/Modal";
-import { Check } from "lucide-react";
+import { Check, Copy, CopyCheck } from "lucide-react";
 import { supabase } from "../../../lib/supabaseClient";
 import { useSessao } from "../../../lib/SessaoContext";
 import { gerarLogin } from "../../../lib/textoUtil";
@@ -27,6 +27,7 @@ function Conteudo() {
   const [cargo, setCargo] = useState(CARGOS.OPERACIONAL);
   const [unidadeIds, setUnidadeIds] = useState([]);
   const [usuarioCriado, setUsuarioCriado] = useState(null); // { login, senha }
+  const [copiado, setCopiado] = useState(false);
   const [usuarioEditando, setUsuarioEditando] = useState(null);
   const [edNome, setEdNome] = useState("");
   const [edSobrenome, setEdSobrenome] = useState("");
@@ -127,6 +128,20 @@ function Conteudo() {
     }
     setUsuarioEditando(null);
     carregar();
+  }
+
+  async function copiarMensagem() {
+    if (!usuarioCriado) return;
+    const link = typeof window !== "undefined" ? `${window.location.origin}/login` : "";
+    const mensagem =
+      `Olá! Seu acesso ao sistema *Controle de Orçamentos (OW) — Balcão* foi criado.\n\n` +
+      `*Login:* ${usuarioCriado.login}\n` +
+      `*Senha inicial:* ${usuarioCriado.senha}\n` +
+      `(você vai precisar trocar a senha no primeiro acesso)\n\n` +
+      `*Acesse aqui:* ${link}`;
+    await navigator.clipboard.writeText(mensagem);
+    setCopiado(true);
+    setTimeout(() => setCopiado(false), 2000);
   }
 
   async function alternarBloqueio(usuarioAlvo) {
@@ -282,7 +297,7 @@ function Conteudo() {
             </div>
             <p className="text-xs text-muted">O usuário será obrigado a trocar a senha no primeiro acesso.</p>
             <div className="rounded-lg bg-canvas p-3 text-sm">
-              <p className="text-xs text-muted mb-1">Link de acesso ao sistema — envie para o novo usuário:</p>
+              <p className="text-xs text-muted mb-1">Link de acesso ao sistema:</p>
               <a
                 href={typeof window !== "undefined" ? `${window.location.origin}/login` : "/login"}
                 target="_blank"
@@ -292,7 +307,11 @@ function Conteudo() {
                 {typeof window !== "undefined" ? `${window.location.origin}/login` : "/login"}
               </a>
             </div>
-            <div className="flex justify-end">
+            <div className="flex justify-between items-center">
+              <button className="btn flex items-center gap-1.5" onClick={copiarMensagem}>
+                {copiado ? <CopyCheck size={14} className="text-teal" /> : <Copy size={14} />}
+                {copiado ? "Copiado! Cole no WhatsApp" : "Copiar mensagem para WhatsApp"}
+              </button>
               <button className="btn-primary" onClick={() => setUsuarioCriado(null)}>Entendi</button>
             </div>
           </div>
