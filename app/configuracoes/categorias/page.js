@@ -1,27 +1,11 @@
 "use client";
 import { useEffect, useState } from "react";
-import { Smartphone, Tv, Tablet, Watch, Laptop, Bot, Cable, Tag, Trash2 } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import AppShell from "../../../components/AppShell";
 import { supabase } from "../../../lib/supabaseClient";
 import { useSessao } from "../../../lib/SessaoContext";
 import { podeConfigCategorias } from "../../../lib/permissions";
-
-const ICONES = {
-  celular: Smartphone,
-  tv: Tv,
-  tablet: Tablet,
-  relógio: Watch,
-  relogio: Watch,
-  notebook: Laptop,
-  robô: Bot,
-  robo: Bot,
-  acessório: Cable,
-  acessorio: Cable,
-};
-
-function iconeCategoria(nome) {
-  return ICONES[nome.toLowerCase()] || Tag;
-}
+import { iconeCategoria } from "../../../lib/iconesCategoria";
 
 function Conteudo() {
   const { usuario } = useSessao();

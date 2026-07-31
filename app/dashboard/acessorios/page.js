@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { Cable, Percent, Hash } from "lucide-react";
+import { Cable, Percent, Hash, Store } from "lucide-react";
 import AppShell from "../../../components/AppShell";
 import { supabase } from "../../../lib/supabaseClient";
 import { useSessao } from "../../../lib/SessaoContext";
@@ -13,24 +13,29 @@ function inicioMes() {
 
 function ConteudoAcessorios() {
   const { unidades } = useSessao();
+  const [unidadeId, setUnidadeId] = useState(""); // "" = todas as unidades que eu tenho acesso
   const [linhas, setLinhas] = useState([]);
   const [carregando, setCarregando] = useState(true);
 
   useEffect(() => {
     if (unidades.length === 0) return;
     (async () => {
+      setCarregando(true);
       const { data: categoriaAcessorio } = await supabase.from("categorias").select("id").eq("nome", "Acessório").single();
       if (!categoriaAcessorio) {
         setCarregando(false);
         return;
       }
 
-      const { data: lancs } = await supabase
+      let query = supabase
         .from("lancamentos")
         .select("valor_pago, tipos_servico(nome)")
-        .in("unidade_id", unidades.map((u) => u.id))
         .eq("categoria_id", categoriaAcessorio.id)
         .gte("data", inicioMes());
+
+      query = unidadeId ? query.eq("unidade_id", unidadeId) : query.in("unidade_id", unidades.map((u) => u.id));
+
+      const { data: lancs } = await query;
 
       const mapa = {};
       (lancs || []).forEach((l) => {
@@ -43,7 +48,7 @@ function ConteudoAcessorios() {
       setLinhas(Object.values(mapa).sort((a, b) => b.valor - a.valor));
       setCarregando(false);
     })();
-  }, [unidades]);
+  }, [unidades, unidadeId]);
 
   const totalValor = linhas.reduce((s, l) => s + l.valor, 0);
   const totalQtd = linhas.reduce((s, l) => s + l.qtd, 0);
@@ -51,10 +56,23 @@ function ConteudoAcessorios() {
 
   return (
     <div className="max-w-4xl">
-      <div className="mb-6">
-        <p className="text-xs uppercase tracking-wider text-muted mb-1">Dashboard</p>
-        <h1 className="font-display text-2xl font-semibold text-ink">Acessórios de {mesReferenciaLabel(inicioMes())}</h1>
-        <p className="text-sm text-muted mt-1">Vendas de acessórios por tipo de item.</p>
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <p className="text-xs uppercase tracking-wider text-muted mb-1">Dashboard</p>
+          <h1 className="font-display text-2xl font-semibold text-ink">Acessórios de {mesReferenciaLabel(inicioMes())}</h1>
+          <p className="text-sm text-muted mt-1">Vendas de acessórios por tipo de item.</p>
+        </div>
+        {unidades.length > 1 && (
+          <div className="w-64 shrink-0">
+            <label className="field-label flex items-center gap-1.5"><Store size={12} className="text-muted" /> Unidade</label>
+            <select className="field-input" value={unidadeId} onChange={(e) => setUnidadeId(e.target.value)}>
+              <option value="">Todas as unidades</option>
+              {unidades.map((u) => (
+                <option key={u.id} value={u.id}>{u.nome}</option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-3 gap-3 mb-6">

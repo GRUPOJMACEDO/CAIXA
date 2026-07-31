@@ -1,10 +1,16 @@
 "use client";
 import { useEffect, useState } from "react";
-import { Search, X, FileDown } from "lucide-react";
+import { Search, X, FileDown, Pencil, SearchX } from "lucide-react";
 import AppShell from "../../components/AppShell";
+import Modal from "../../components/Modal";
+import CurrencyInput from "../../components/CurrencyInput";
 import { supabase } from "../../lib/supabaseClient";
 import { useSessao } from "../../lib/SessaoContext";
+import { podeAlterar } from "../../lib/permissions";
+import { iconeCategoria } from "../../lib/iconesCategoria";
 import { formatarDataBR, formatarMoedaSemSimbolo } from "../../lib/formato";
+
+const FORMAS_PAGAMENTO = ["PIX", "DÉBITO", "CRÉDITO", "DINHEIRO", "BOLETO", "LINK DE PAGAMENTO"];
 
 function paraCSV(linhas, mostrarUnidade) {
   const cabecalho = ["Data", ...(mostrarUnidade ? ["Unidade"] : []), "Nº OS", "Categoria", "Tipo de Serviço", "Orçamento Aprovado", "Valor Pago"];
@@ -22,7 +28,7 @@ function paraCSV(linhas, mostrarUnidade) {
 }
 
 function Conteudo() {
-  const { unidades } = useSessao();
+  const { usuario, unidades } = useSessao();
   const [categorias, setCategorias] = useState([]);
   const [numeroOs, setNumeroOs] = useState("");
   const [dataDe, setDataDe] = useState("");
@@ -31,7 +37,12 @@ function Conteudo() {
   const [unidadeId, setUnidadeId] = useState("");
   const [resultados, setResultados] = useState(null);
   const [buscando, setBuscando] = useState(false);
+  const [selecionado, setSelecionado] = useState(null);
+  const [editando, setEditando] = useState(false);
+  const [edicao, setEdicao] = useState({});
+  const [salvando, setSalvando] = useState(false);
   const mostrarUnidade = unidades.length > 1;
+  const podeEditar = podeAlterar(usuario.cargo);
 
   useEffect(() => {
     supabase.from("categorias").select("*").order("nome").then(({ data }) => setCategorias(data || []));
@@ -42,7 +53,9 @@ function Conteudo() {
     setBuscando(true);
     let query = supabase
       .from("lancamentos")
-      .select("id, data, numero_os, valor_pago, orcamento_aprovado, unidade_id, unidades(nome), categorias(nome), tipos_servico(nome)")
+      .select(
+        "id, data, numero_os, valor_pago, orcamento_aprovado, forma_pagamento, parcelas, bandeira, unidade_id, categoria_id, tipo_servico_id, unidades(nome), categorias(nome), tipos_servico(nome), usuarios!atendente_id(nome_completo)"
+      )
       .in("unidade_id", unidadeId ? [unidadeId] : unidades.map((u) => u.id))
       .order("data", { ascending: false })
       .limit(300);
@@ -73,6 +86,44 @@ function Conteudo() {
     link.href = URL.createObjectURL(blob);
     link.download = `consulta-caixa-jmacedo-${new Date().toISOString().slice(0, 10)}.csv`;
     link.click();
+  }
+
+  function abrirDetalhe(item) {
+    setSelecionado(item);
+    setEditando(false);
+    setEdicao({
+      orcamento_aprovado: Number(item.orcamento_aprovado),
+      valor_pago: Number(item.valor_pago),
+      forma_pagamento: item.forma_pagamento,
+      parcelas: item.parcelas || "",
+      bandeira: item.bandeira || "",
+    });
+  }
+
+  async function salvarEdicao() {
+    setSalvando(true);
+    const { error } = await supabase
+      .from("lancamentos")
+      .update({
+        orcamento_aprovado: Number(edicao.orcamento_aprovado),
+        valor_pago: Number(edicao.valor_pago),
+        forma_pagamento: edicao.forma_pagamento,
+        parcelas: edicao.parcelas ? Number(edicao.parcelas) : null,
+        bandeira: edicao.bandeira || null,
+        alterado_por: usuario.id,
+        alterado_em: new Date().toISOString(),
+      })
+      .eq("id", selecionado.id);
+    setSalvando(false);
+    if (error) {
+      alert("Erro ao salvar: " + error.message);
+      return;
+    }
+    setResultados((atual) =>
+      atual.map((r) => (r.id === selecionado.id ? { ...r, ...edicao, orcamento_aprovado: edicao.orcamento_aprovado, valor_pago: edicao.valor_pago } : r))
+    );
+    setEditando(false);
+    setSelecionado(null);
   }
 
   return (
@@ -136,38 +187,125 @@ function Conteudo() {
               </button>
             )}
           </div>
-          <div className="card overflow-hidden">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-xs uppercase tracking-wider text-muted border-b border-line">
-                  <td className="p-3">Data</td>
-                  {mostrarUnidade && <td className="p-3">Unidade</td>}
-                  <td className="p-3">Nº OS</td>
-                  <td className="p-3">Categoria</td>
-                  <td className="p-3">Tipo de serviço</td>
-                  <td className="p-3 text-right">Orçamento</td>
-                  <td className="p-3 text-right">Pago</td>
-                </tr>
-              </thead>
-              <tbody>
-                {resultados.length === 0 && (
-                  <tr><td className="p-4 text-muted text-center" colSpan={mostrarUnidade ? 7 : 6}>Nenhum resultado encontrado.</td></tr>
-                )}
-                {resultados.map((r) => (
-                  <tr key={r.id} className="border-t border-line">
-                    <td className="p-3">{formatarDataBR(r.data)}</td>
-                    {mostrarUnidade && <td className="p-3">{r.unidades?.nome}</td>}
-                    <td className="p-3 font-mono-num">{r.numero_os}</td>
-                    <td className="p-3">{r.categorias?.nome || "—"}</td>
-                    <td className="p-3">{r.tipos_servico?.nome}</td>
-                    <td className="p-3 text-right font-mono-num">R$ {formatarMoedaSemSimbolo(r.orcamento_aprovado)}</td>
-                    <td className="p-3 text-right font-mono-num font-medium">R$ {formatarMoedaSemSimbolo(r.valor_pago)}</td>
+
+          {resultados.length === 0 ? (
+            <div className="card p-10 flex flex-col items-center text-center text-muted">
+              <SearchX size={28} className="mb-2 opacity-60" />
+              <p>Nenhum resultado encontrado.</p>
+            </div>
+          ) : (
+            <div className="card overflow-hidden">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-xs uppercase tracking-wider text-muted border-b border-line">
+                    <td className="p-3">Data</td>
+                    {mostrarUnidade && <td className="p-3">Unidade</td>}
+                    <td className="p-3">Nº OS</td>
+                    <td className="p-3">Categoria</td>
+                    <td className="p-3">Tipo de serviço</td>
+                    <td className="p-3 text-right">Orçamento</td>
+                    <td className="p-3 text-right">Pago</td>
+                    <td className="p-3 w-10"></td>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {resultados.map((r) => {
+                    const Icone = iconeCategoria(r.categorias?.nome);
+                    return (
+                      <tr key={r.id} className="border-t border-line hover:bg-canvas/60 cursor-pointer" onClick={() => abrirDetalhe(r)}>
+                        <td className="p-3">{formatarDataBR(r.data)}</td>
+                        {mostrarUnidade && <td className="p-3">{r.unidades?.nome}</td>}
+                        <td className="p-3 font-mono-num">{r.numero_os}</td>
+                        <td className="p-3">
+                          <span className="inline-flex items-center gap-1.5">
+                            <Icone size={13} className="text-muted" />
+                            {r.categorias?.nome || "—"}
+                          </span>
+                        </td>
+                        <td className="p-3">{r.tipos_servico?.nome}</td>
+                        <td className="p-3 text-right font-mono-num">R$ {formatarMoedaSemSimbolo(r.orcamento_aprovado)}</td>
+                        <td className="p-3 text-right font-mono-num font-medium">R$ {formatarMoedaSemSimbolo(r.valor_pago)}</td>
+                        <td className="p-3 text-right">
+                          {podeEditar && (
+                            <button
+                              className="text-muted hover:text-gold transition"
+                              title="Alterar"
+                              onClick={(e) => { e.stopPropagation(); abrirDetalhe(r); setEditando(true); }}
+                            >
+                              <Pencil size={14} />
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </>
+      )}
+
+      {selecionado && (
+        <Modal
+          titulo={`OS ${selecionado.numero_os}`}
+          subtitulo={mostrarUnidade ? selecionado.unidades?.nome : undefined}
+          onFechar={() => setSelecionado(null)}
+        >
+          {!editando ? (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div><p className="text-xs text-muted">Data</p><p className="font-medium">{formatarDataBR(selecionado.data)}</p></div>
+                <div><p className="text-xs text-muted">Categoria</p><p className="font-medium">{selecionado.categorias?.nome || "—"}</p></div>
+                <div><p className="text-xs text-muted">Tipo de serviço</p><p className="font-medium">{selecionado.tipos_servico?.nome}</p></div>
+                <div><p className="text-xs text-muted">Atendente</p><p className="font-medium">{selecionado.usuarios?.nome_completo}</p></div>
+                <div><p className="text-xs text-muted">Orçamento aprovado</p><p className="font-mono-num font-medium">R$ {formatarMoedaSemSimbolo(selecionado.orcamento_aprovado)}</p></div>
+                <div><p className="text-xs text-muted">Valor pago</p><p className="font-mono-num font-medium">R$ {formatarMoedaSemSimbolo(selecionado.valor_pago)}</p></div>
+                <div><p className="text-xs text-muted">Forma de pagamento</p><p className="font-medium">{selecionado.forma_pagamento}</p></div>
+                <div><p className="text-xs text-muted">Bandeira / Parcelas</p><p className="font-medium">{selecionado.bandeira || "—"} {selecionado.parcelas ? `· ${selecionado.parcelas}x` : ""}</p></div>
+              </div>
+              {podeEditar && (
+                <div className="flex justify-end">
+                  <button className="btn flex items-center gap-1.5" onClick={() => setEditando(true)}>
+                    <Pencil size={14} /> Alterar
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="field-label">Orçamento aprovado</label>
+                  <CurrencyInput valor={edicao.orcamento_aprovado} onChange={(v) => setEdicao({ ...edicao, orcamento_aprovado: v })} />
+                </div>
+                <div>
+                  <label className="field-label">Valor pago</label>
+                  <CurrencyInput valor={edicao.valor_pago} onChange={(v) => setEdicao({ ...edicao, valor_pago: v })} />
+                </div>
+                <div>
+                  <label className="field-label">Forma de pagamento</label>
+                  <select className="field-input" value={edicao.forma_pagamento} onChange={(e) => setEdicao({ ...edicao, forma_pagamento: e.target.value })}>
+                    {FORMAS_PAGAMENTO.map((f) => (
+                      <option key={f} value={f}>{f}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="field-label">Bandeira</label>
+                  <input className="field-input" value={edicao.bandeira} onChange={(e) => setEdicao({ ...edicao, bandeira: e.target.value.toUpperCase() })} />
+                </div>
+              </div>
+              <p className="text-xs text-muted">Toda alteração fica registrada no log do sistema para auditoria.</p>
+              <div className="flex justify-end gap-2">
+                <button className="btn" onClick={() => setEditando(false)}>Cancelar</button>
+                <button className="btn-primary" onClick={salvarEdicao} disabled={salvando}>
+                  {salvando ? "Salvando…" : "Salvar alteração"}
+                </button>
+              </div>
+            </div>
+          )}
+        </Modal>
       )}
     </div>
   );

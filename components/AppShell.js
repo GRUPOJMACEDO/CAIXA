@@ -130,7 +130,7 @@ function Shell({ children }) {
   const pathname = usePathname();
   const router = useRouter();
   const { usuario, sair } = useSessao();
-  const [recolhido, setRecolhido] = useState(true); // menu inicia recolhido, por padrão
+  const [recolhido, setRecolhido] = useState(false); // painel lateral sempre visível por padrão
   const [secaoAberta, setSecaoAberta] = useState(null);
   const ignorarProximaAutoAbertura = useRef(false);
 

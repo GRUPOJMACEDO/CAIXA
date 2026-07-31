@@ -1,10 +1,12 @@
 "use client";
 import { useEffect, useState } from "react";
-import { Wallet, CheckCircle2, Clock, Percent, Hash } from "lucide-react";
+import { Wallet, CheckCircle2, Clock, Percent, Hash, Lock } from "lucide-react";
 import AppShell from "../../../components/AppShell";
+import Modal from "../../../components/Modal";
 import { supabase } from "../../../lib/supabaseClient";
 import { useSessao } from "../../../lib/SessaoContext";
-import { formatarMoedaSemSimbolo, mesReferenciaLabel } from "../../../lib/formato";
+import { CARGOS } from "../../../lib/permissions";
+import { formatarMoedaSemSimbolo, formatarDataBR, mesReferenciaLabel } from "../../../lib/formato";
 
 function inicioMes() {
   const d = new Date();
@@ -12,59 +14,63 @@ function inicioMes() {
 }
 
 const MEDALHA = ["text-gold", "text-prata", "text-bronze"];
+const CARGOS_GESTAO = [CARGOS.SUPERVISAO, CARGOS.GERENCIA, CARGOS.ADMINISTRADOR, CARGOS.DIRETOR];
 
 function ConteudoVendedores() {
-  const { unidades } = useSessao();
+  const { usuario, unidades } = useSessao();
   const [linhas, setLinhas] = useState([]);
   const [carregando, setCarregando] = useState(true);
+  const [detalhe, setDetalhe] = useState(null);
+  const [lancamentosDetalhe, setLancamentosDetalhe] = useState([]);
+  const [carregandoDetalhe, setCarregandoDetalhe] = useState(false);
+
+  const idsAutorizados = new Set(unidades.map((u) => u.id));
 
   useEffect(() => {
-    if (unidades.length === 0) return;
     (async () => {
-      const { data: categoriaAcessorio } = await supabase.from("categorias").select("id").eq("nome", "Acessório").single();
-      if (!categoriaAcessorio) {
-        setCarregando(false);
-        return;
-      }
-
-      const { data: lancs } = await supabase
-        .from("lancamentos")
-        .select("atendente_id, orcamento_aprovado, valor_pago, numero_os, usuarios!atendente_id(nome_completo)")
-        .in("unidade_id", unidades.map((u) => u.id))
-        .eq("categoria_id", categoriaAcessorio.id)
-        .gte("data", inicioMes());
-
-      const mapa = {};
-      (lancs || []).forEach((l) => {
-        const id = l.atendente_id;
-        if (!mapa[id]) {
-          mapa[id] = { id, nome: l.usuarios?.nome_completo || "—", orcamento: 0, pago: 0, qtdOs: new Set() };
-        }
-        mapa[id].orcamento += Number(l.orcamento_aprovado);
-        mapa[id].pago += Number(l.valor_pago);
-        mapa[id].qtdOs.add(l.numero_os);
-      });
-
-      const lista = Object.values(mapa)
-        .map((v) => ({ ...v, falta: v.orcamento - v.pago, premio: v.pago * 0.05, qtdOs: v.qtdOs.size }))
-        .sort((a, b) => b.pago - a.pago);
-
+      const { data } = await supabase.from("vw_dashboard_vendedores").select("*");
+      const lista = (data || [])
+        .map((v) => ({ ...v, falta: Number(v.orcamento_aprovado) - Number(v.valor_pago), premio: Number(v.valor_pago) * 0.05 }))
+        .filter((v) => Number(v.valor_pago) > 0 || Number(v.qtd_os) > 0)
+        .sort((a, b) => Number(b.valor_pago) - Number(a.valor_pago));
       setLinhas(lista);
       setCarregando(false);
     })();
-  }, [unidades]);
+  }, []);
 
-  const totalOrcamento = linhas.reduce((s, l) => s + l.orcamento, 0);
-  const totalPago = linhas.reduce((s, l) => s + l.pago, 0);
+  const totalOrcamento = linhas.reduce((s, l) => s + Number(l.orcamento_aprovado), 0);
+  const totalPago = linhas.reduce((s, l) => s + Number(l.valor_pago), 0);
   const totalFalta = linhas.reduce((s, l) => s + l.falta, 0);
-  const totalQtdOs = linhas.reduce((s, l) => s + l.qtdOs, 0);
+  const totalQtdOs = linhas.reduce((s, l) => s + Number(l.qtd_os), 0);
+
+  function podeVerDetalhe(linha) {
+    if (CARGOS_GESTAO.includes(usuario.cargo)) return idsAutorizados.has(linha.unidade_id);
+    return linha.usuario_id === usuario.id;
+  }
+
+  async function abrirDetalhe(linha) {
+    setDetalhe({ titulo: linha.nome_completo, unidadeId: linha.unidade_id, usuarioId: linha.usuario_id });
+    if (!podeVerDetalhe(linha)) return;
+    setCarregandoDetalhe(true);
+    const { data: categoriaAcessorio } = await supabase.from("categorias").select("id").eq("nome", "Acessório").single();
+    const { data } = await supabase
+      .from("lancamentos")
+      .select("id, data, numero_os, orcamento_aprovado, valor_pago, tipos_servico(nome)")
+      .eq("unidade_id", linha.unidade_id)
+      .eq("atendente_id", linha.usuario_id)
+      .eq("categoria_id", categoriaAcessorio?.id)
+      .gte("data", inicioMes())
+      .order("data", { ascending: false });
+    setLancamentosDetalhe(data || []);
+    setCarregandoDetalhe(false);
+  }
 
   return (
     <div className="max-w-5xl">
       <div className="mb-6">
         <p className="text-xs uppercase tracking-wider text-muted mb-1">Dashboard</p>
         <h1 className="font-display text-2xl font-semibold text-ink">Vendedores — Acessórios de {mesReferenciaLabel(inicioMes())}</h1>
-        <p className="text-sm text-muted mt-1">Ranking de vendas de acessórios por atendente, com prêmio de 5%.</p>
+        <p className="text-sm text-muted mt-1">Ranking de vendas de acessórios por atendente, de todas as unidades, com prêmio de 5%.</p>
       </div>
 
       <div className="grid grid-cols-5 gap-3 mb-6">
@@ -115,30 +121,70 @@ function ConteudoVendedores() {
           <thead>
             <tr className="text-xs uppercase tracking-wider text-muted border-b border-line">
               <td className="p-3">Atendente</td>
+              <td className="p-3">Unidade</td>
               <td className="p-3 text-right">Valor vendido</td>
               <td className="p-3 text-right">Prêmio (5%)</td>
               <td className="p-3 text-right">Qtd. OS</td>
             </tr>
           </thead>
           <tbody>
-            {carregando && <tr><td className="p-4 text-muted" colSpan={4}>Carregando…</td></tr>}
-            {!carregando && linhas.length === 0 && <tr><td className="p-4 text-muted" colSpan={4}>Nenhuma venda de acessório no mês.</td></tr>}
+            {carregando && <tr><td className="p-4 text-muted" colSpan={5}>Carregando…</td></tr>}
+            {!carregando && linhas.length === 0 && <tr><td className="p-4 text-muted" colSpan={5}>Nenhuma venda de acessório no mês.</td></tr>}
             {linhas.map((l, i) => (
-              <tr key={l.id} className="border-t border-line">
+              <tr key={`${l.usuario_id}-${l.unidade_id}`} className="border-t border-line hover:bg-canvas/60 cursor-pointer" onClick={() => abrirDetalhe(l)}>
                 <td className="p-3">
                   <span className="inline-flex items-center gap-2">
                     <span className={`text-xs font-semibold w-6 ${MEDALHA[i] || "text-muted"}`}>{i + 1}º</span>
-                    {l.nome}
+                    {l.nome_completo}
+                    {!podeVerDetalhe(l) && <Lock size={12} className="text-muted" />}
                   </span>
                 </td>
-                <td className="p-3 text-right font-mono-num font-medium">R$ {formatarMoedaSemSimbolo(l.pago)}</td>
+                <td className="p-3 text-muted">{l.unidade_nome}</td>
+                <td className="p-3 text-right font-mono-num font-medium">R$ {formatarMoedaSemSimbolo(l.valor_pago)}</td>
                 <td className="p-3 text-right font-mono-num text-gold">R$ {formatarMoedaSemSimbolo(l.premio)}</td>
-                <td className="p-3 text-right font-mono-num text-muted">{l.qtdOs}</td>
+                <td className="p-3 text-right font-mono-num text-muted">{l.qtd_os}</td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+
+      {detalhe && (
+        <Modal titulo={detalhe.titulo} subtitulo={`${lancamentosDetalhe.length} lançamento(s) de acessório no mês`} onFechar={() => setDetalhe(null)} largura="max-w-3xl">
+          {!podeVerDetalhe({ unidade_id: detalhe.unidadeId, usuario_id: detalhe.usuarioId }) ? (
+            <div className="flex flex-col items-center text-center py-6 text-muted">
+              <Lock size={22} className="mb-2 opacity-60" />
+              <p className="text-sm">Você não tem permissão para ver o detalhe deste atendente.</p>
+            </div>
+          ) : carregandoDetalhe ? (
+            <p className="text-sm text-muted py-6 text-center">Carregando…</p>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-xs uppercase tracking-wider text-muted border-b border-line">
+                  <td className="pb-2">Data</td>
+                  <td className="pb-2">OS</td>
+                  <td className="pb-2">Tipo de serviço</td>
+                  <td className="pb-2 text-right">Valor pago</td>
+                </tr>
+              </thead>
+              <tbody>
+                {lancamentosDetalhe.map((l) => (
+                  <tr key={l.id} className="border-t border-line">
+                    <td className="py-2">{formatarDataBR(l.data)}</td>
+                    <td className="py-2 font-mono-num">{l.numero_os}</td>
+                    <td className="py-2">{l.tipos_servico?.nome}</td>
+                    <td className="py-2 text-right font-mono-num font-medium">R$ {formatarMoedaSemSimbolo(l.valor_pago)}</td>
+                  </tr>
+                ))}
+                {lancamentosDetalhe.length === 0 && (
+                  <tr><td colSpan={4} className="py-4 text-muted text-center">Nenhum lançamento.</td></tr>
+                )}
+              </tbody>
+            </table>
+          )}
+        </Modal>
+      )}
     </div>
   );
 }

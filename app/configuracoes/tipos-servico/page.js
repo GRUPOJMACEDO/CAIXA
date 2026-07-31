@@ -4,7 +4,7 @@ import { Trash2 } from "lucide-react";
 import AppShell from "../../../components/AppShell";
 import { supabase } from "../../../lib/supabaseClient";
 import { useSessao } from "../../../lib/SessaoContext";
-import { podeConfigTiposServico, podeAlterar } from "../../../lib/permissions";
+import { podeConfigTiposServico } from "../../../lib/permissions";
 
 function Conteudo() {
   const { usuario } = useSessao();
@@ -54,8 +54,8 @@ function Conteudo() {
   }
 
   const podeCriar = podeConfigTiposServico(usuario.cargo);
-  const podeEditar = podeAlterar(usuario.cargo); // supervisão/gerência/administrador/diretor
-  const podeExcluirItem = podeConfigTiposServico(usuario.cargo); // gerência/administrador/diretor
+  const podeEditar = podeConfigTiposServico(usuario.cargo); // administrador/diretor
+  const podeExcluirItem = podeConfigTiposServico(usuario.cargo); // administrador/diretor
 
   return (
     <div className="max-w-3xl">

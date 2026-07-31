@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { Wallet, CheckCircle2, Clock, Percent, Hash } from "lucide-react";
+import { Wallet, CheckCircle2, Clock, Percent, Hash, Lock } from "lucide-react";
 import AppShell from "../../components/AppShell";
 import Modal from "../../components/Modal";
 import { supabase } from "../../lib/supabaseClient";
@@ -15,89 +15,86 @@ function inicioMes() {
 const MEDALHA = ["text-gold", "text-prata", "text-bronze"];
 
 function ConteudoDashboard() {
-  const { unidades } = useSessao();
+  const { unidades } = useSessao(); // unidades que EU tenho acesso (para liberar o drill-down)
   const [linhas, setLinhas] = useState([]);
-  const [lancamentos, setLancamentos] = useState([]);
+  const [lancamentosDetalhe, setLancamentosDetalhe] = useState([]);
   const [carregando, setCarregando] = useState(true);
-  const [detalhe, setDetalhe] = useState(null); // { titulo, unidadeId | null (todas) }
+  const [detalhe, setDetalhe] = useState(null); // { titulo, unidadeId }
+  const [carregandoDetalhe, setCarregandoDetalhe] = useState(false);
+
+  const idsAutorizados = new Set(unidades.map((u) => u.id));
 
   useEffect(() => {
-    if (unidades.length === 0) return;
     (async () => {
-      const unidadeIds = unidades.map((u) => u.id);
-      setLinhas(unidades.map((u) => ({ ...u, orcamento: 0, pago: 0, falta: 0, qtdOs: 0 })));
-
-      const { data: lancs } = await supabase
-        .from("lancamentos")
-        .select("id, unidade_id, data, numero_os, orcamento_aprovado, valor_pago, tipos_servico(nome)")
-        .in("unidade_id", unidadeIds)
-        .gte("data", inicioMes())
-        .order("data", { ascending: false });
-
-      setLancamentos(lancs || []);
-      setLinhas((atual) =>
-        atual.map((u) => {
-          const doUnidade = (lancs || []).filter((l) => l.unidade_id === u.id);
-          const orcamento = doUnidade.reduce((s, l) => s + Number(l.orcamento_aprovado), 0);
-          const pago = doUnidade.reduce((s, l) => s + Number(l.valor_pago), 0);
-          const qtdOs = new Set(doUnidade.map((l) => l.numero_os)).size;
-          return { ...u, orcamento, pago, falta: orcamento - pago, qtdOs };
-        })
-      );
+      const { data } = await supabase.from("vw_dashboard_valores").select("*");
+      const lista = (data || []).map((u) => ({
+        ...u,
+        falta: Number(u.orcamento_aprovado) - Number(u.valor_pago),
+      }));
+      setLinhas(lista);
       setCarregando(false);
     })();
-  }, [unidades]);
+  }, []);
 
-  const totalPago = linhas.reduce((s, l) => s + l.pago, 0);
-  const totalOrcamento = linhas.reduce((s, l) => s + l.orcamento, 0);
+  const totalPago = linhas.reduce((s, l) => s + Number(l.valor_pago), 0);
+  const totalOrcamento = linhas.reduce((s, l) => s + Number(l.orcamento_aprovado), 0);
   const totalFalta = linhas.reduce((s, l) => s + l.falta, 0);
-  const totalQtdOs = new Set(lancamentos.map((l) => `${l.unidade_id}-${l.numero_os}`)).size;
-  const ordenadas = linhas.slice().sort((a, b) => b.pago - a.pago);
+  const totalQtdOs = linhas.reduce((s, l) => s + Number(l.qtd_os), 0);
+  const ordenadas = linhas.slice().sort((a, b) => Number(b.valor_pago) - Number(a.valor_pago));
 
-  const lancamentosDoDetalhe = detalhe
-    ? lancamentos.filter((l) => (detalhe.unidadeId ? l.unidade_id === detalhe.unidadeId : true))
-    : [];
+  async function abrirDetalhe(unidade) {
+    setDetalhe({ titulo: unidade.unidade_nome, unidadeId: unidade.unidade_id });
+    if (!idsAutorizados.has(unidade.unidade_id)) return; // sem acesso — a tela mostra o aviso
+    setCarregandoDetalhe(true);
+    const { data } = await supabase
+      .from("lancamentos")
+      .select("id, data, numero_os, orcamento_aprovado, valor_pago, tipos_servico(nome)")
+      .eq("unidade_id", unidade.unidade_id)
+      .gte("data", inicioMes())
+      .order("data", { ascending: false });
+    setLancamentosDetalhe(data || []);
+    setCarregandoDetalhe(false);
+  }
 
   return (
     <div className="max-w-5xl">
       <div className="mb-6">
-        <p className="text-xs uppercase tracking-wider text-muted mb-1">Visão geral</p>
-        <h1 className="font-display text-2xl font-semibold text-ink">Dashboard do mês de {mesReferenciaLabel(inicioMes())}</h1>
+        <p className="text-xs uppercase tracking-wider text-muted mb-1">Dashboard</p>
+        <h1 className="font-display text-2xl font-semibold text-ink">Valores do mês de {mesReferenciaLabel(inicioMes())}</h1>
+        <p className="text-sm text-muted mt-1">Ranking de todas as unidades do grupo.</p>
       </div>
 
       <div className="grid grid-cols-5 gap-3 mb-6">
-        <button onClick={() => setDetalhe({ titulo: "Orçamento aprovado — todas as unidades", unidadeId: null })} className="card overflow-hidden text-left hover:border-gold/50 transition">
+        <div className="card overflow-hidden">
           <div className="h-1.5 bg-[#2670B5]" />
           <div className="p-4">
             <div className="w-8 h-8 rounded-lg bg-[#2670B5]/10 flex items-center justify-center text-[#2670B5] mb-2"><Wallet size={16} /></div>
             <p className="text-xs text-muted mb-1">Orçamento aprovado</p>
             <p className="font-mono-num text-xl font-semibold text-ink">R$ {formatarMoedaSemSimbolo(totalOrcamento)}</p>
           </div>
-        </button>
-        <button onClick={() => setDetalhe({ titulo: "Valor pago — todas as unidades", unidadeId: null })} className="card overflow-hidden text-left hover:border-gold/50 transition">
+        </div>
+        <div className="card overflow-hidden">
           <div className="h-1.5 bg-[#3F8A5C]" />
           <div className="p-4">
             <div className="w-8 h-8 rounded-lg bg-[#3F8A5C]/10 flex items-center justify-center text-[#3F8A5C] mb-2"><CheckCircle2 size={16} /></div>
             <p className="text-xs text-muted mb-1">Valor pago</p>
             <p className="font-mono-num text-xl font-semibold text-ink">R$ {formatarMoedaSemSimbolo(totalPago)}</p>
           </div>
-        </button>
-        <button onClick={() => setDetalhe({ titulo: "A receber — todas as unidades", unidadeId: null })} className="card overflow-hidden text-left hover:border-gold/50 transition">
+        </div>
+        <div className="card overflow-hidden">
           <div className="h-1.5 bg-[#9C5A34]" />
           <div className="p-4">
             <div className="w-8 h-8 rounded-lg bg-[#9C5A34]/10 flex items-center justify-center text-[#9C5A34] mb-2"><Clock size={16} /></div>
             <p className="text-xs text-muted mb-1">Total a receber</p>
             <p className="font-mono-num text-xl font-semibold text-[#9C5A34]">R$ {formatarMoedaSemSimbolo(totalFalta)}</p>
           </div>
-        </button>
+        </div>
         <div className="card overflow-hidden">
           <div className="h-1.5 bg-[#C9A227]" />
           <div className="p-4">
             <div className="w-8 h-8 rounded-lg bg-[#C9A227]/10 flex items-center justify-center text-[#9C7E13] mb-2"><Percent size={16} /></div>
             <p className="text-xs text-muted mb-1">% recebido</p>
-            <p className="font-mono-num text-xl font-semibold text-[#9C7E13]">
-              {totalOrcamento ? ((totalPago / totalOrcamento) * 100).toFixed(1) : "0.0"}%
-            </p>
+            <p className="font-mono-num text-xl font-semibold text-[#9C7E13]">{totalOrcamento ? ((totalPago / totalOrcamento) * 100).toFixed(1) : "0.0"}%</p>
           </div>
         </div>
         <div className="card overflow-hidden">
@@ -125,20 +122,21 @@ function ConteudoDashboard() {
             {carregando && <tr><td className="p-4 text-muted" colSpan={5}>Carregando…</td></tr>}
             {ordenadas.map((l, i) => (
               <tr
-                key={l.id}
+                key={l.unidade_id}
                 className="border-t border-line hover:bg-canvas/60 cursor-pointer"
-                onClick={() => setDetalhe({ titulo: l.nome, unidadeId: l.id })}
+                onClick={() => abrirDetalhe(l)}
               >
                 <td className="p-3">
                   <span className="inline-flex items-center gap-2">
                     <span className={`text-xs font-semibold w-6 ${MEDALHA[i] || "text-muted"}`}>{i + 1}º</span>
-                    {l.nome}
+                    {l.unidade_nome}
+                    {!idsAutorizados.has(l.unidade_id) && <Lock size={12} className="text-muted" />}
                   </span>
                 </td>
-                <td className="p-3 text-right font-mono-num">R$ {formatarMoedaSemSimbolo(l.orcamento)}</td>
-                <td className="p-3 text-right font-mono-num font-medium">R$ {formatarMoedaSemSimbolo(l.pago)}</td>
+                <td className="p-3 text-right font-mono-num">R$ {formatarMoedaSemSimbolo(l.orcamento_aprovado)}</td>
+                <td className="p-3 text-right font-mono-num font-medium">R$ {formatarMoedaSemSimbolo(l.valor_pago)}</td>
                 <td className="p-3 text-right font-mono-num text-muted">R$ {formatarMoedaSemSimbolo(l.falta)}</td>
-                <td className="p-3 text-right font-mono-num text-muted">{l.qtdOs}</td>
+                <td className="p-3 text-right font-mono-num text-muted">{l.qtd_os}</td>
               </tr>
             ))}
           </tbody>
@@ -146,32 +144,41 @@ function ConteudoDashboard() {
       </div>
 
       {detalhe && (
-        <Modal titulo={detalhe.titulo} subtitulo={`${lancamentosDoDetalhe.length} lançamento(s) no mês`} onFechar={() => setDetalhe(null)} largura="max-w-3xl">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-xs uppercase tracking-wider text-muted border-b border-line">
-                <td className="pb-2">Data</td>
-                <td className="pb-2">OS</td>
-                <td className="pb-2">Tipo de serviço</td>
-                <td className="pb-2 text-right">Orçamento</td>
-                <td className="pb-2 text-right">Valor pago</td>
-              </tr>
-            </thead>
-            <tbody>
-              {lancamentosDoDetalhe.map((l) => (
-                <tr key={l.id} className="border-t border-line">
-                  <td className="py-2">{formatarDataBR(l.data)}</td>
-                  <td className="py-2 font-mono-num">{l.numero_os}</td>
-                  <td className="py-2">{l.tipos_servico?.nome}</td>
-                  <td className="py-2 text-right font-mono-num">R$ {formatarMoedaSemSimbolo(l.orcamento_aprovado)}</td>
-                  <td className="py-2 text-right font-mono-num font-medium">R$ {formatarMoedaSemSimbolo(l.valor_pago)}</td>
+        <Modal titulo={detalhe.titulo} subtitulo={`${lancamentosDetalhe.length} lançamento(s) no mês`} onFechar={() => setDetalhe(null)} largura="max-w-3xl">
+          {!idsAutorizados.has(detalhe.unidadeId) ? (
+            <div className="flex flex-col items-center text-center py-6 text-muted">
+              <Lock size={22} className="mb-2 opacity-60" />
+              <p className="text-sm">Você só pode ver o detalhe dos lançamentos da sua própria unidade.</p>
+            </div>
+          ) : carregandoDetalhe ? (
+            <p className="text-sm text-muted py-6 text-center">Carregando…</p>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-xs uppercase tracking-wider text-muted border-b border-line">
+                  <td className="pb-2">Data</td>
+                  <td className="pb-2">OS</td>
+                  <td className="pb-2">Tipo de serviço</td>
+                  <td className="pb-2 text-right">Orçamento</td>
+                  <td className="pb-2 text-right">Valor pago</td>
                 </tr>
-              ))}
-              {lancamentosDoDetalhe.length === 0 && (
-                <tr><td colSpan={5} className="py-4 text-muted text-center">Nenhum lançamento.</td></tr>
-              )}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {lancamentosDetalhe.map((l) => (
+                  <tr key={l.id} className="border-t border-line">
+                    <td className="py-2">{formatarDataBR(l.data)}</td>
+                    <td className="py-2 font-mono-num">{l.numero_os}</td>
+                    <td className="py-2">{l.tipos_servico?.nome}</td>
+                    <td className="py-2 text-right font-mono-num">R$ {formatarMoedaSemSimbolo(l.orcamento_aprovado)}</td>
+                    <td className="py-2 text-right font-mono-num font-medium">R$ {formatarMoedaSemSimbolo(l.valor_pago)}</td>
+                  </tr>
+                ))}
+                {lancamentosDetalhe.length === 0 && (
+                  <tr><td colSpan={5} className="py-4 text-muted text-center">Nenhum lançamento.</td></tr>
+                )}
+              </tbody>
+            </table>
+          )}
         </Modal>
       )}
     </div>
