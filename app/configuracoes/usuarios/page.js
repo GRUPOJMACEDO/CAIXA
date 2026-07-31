@@ -26,6 +26,16 @@ function Conteudo() {
   const [cargo, setCargo] = useState(CARGOS.OPERACIONAL);
   const [unidadeIds, setUnidadeIds] = useState([]);
   const [usuarioCriado, setUsuarioCriado] = useState(null); // { login, senha }
+  const [usuarioEditando, setUsuarioEditando] = useState(null);
+  const [edNome, setEdNome] = useState("");
+  const [edSobrenome, setEdSobrenome] = useState("");
+  const [edCargo, setEdCargo] = useState(CARGOS.OPERACIONAL);
+  const [edUnidadeIds, setEdUnidadeIds] = useState([]);
+  const [salvandoEdicao, setSalvandoEdicao] = useState(false);
+
+  const edAcessoTodas = podeVerTodasUnidades(edCargo);
+  const edLimite = limiteUnidadesPorCargo(edCargo);
+  const podeEditarUsuario = [CARGOS.ADMINISTRADOR, CARGOS.DIRETOR].includes(usuario.cargo);
 
   const acessoTodas = podeVerTodasUnidades(cargo);
   const limite = limiteUnidadesPorCargo(cargo);
@@ -72,6 +82,49 @@ function Conteudo() {
     setNome("");
     setSobrenome("");
     setUnidadeIds([]);
+    carregar();
+  }
+
+  async function abrirEdicao(usuarioAlvo) {
+    const partes = usuarioAlvo.nome_completo.trim().split(" ");
+    setEdNome(partes[0] || "");
+    setEdSobrenome(partes.slice(1).join(" ") || "");
+    setEdCargo(usuarioAlvo.cargo);
+    const { data: vinculos } = await supabase.from("usuario_unidades").select("unidade_id").eq("usuario_id", usuarioAlvo.id);
+    setEdUnidadeIds((vinculos || []).map((v) => v.unidade_id));
+    setUsuarioEditando(usuarioAlvo);
+  }
+
+  function edAlternarUnidade(id) {
+    if (edLimite === 1) {
+      setEdUnidadeIds([id]);
+    } else {
+      setEdUnidadeIds((atual) => (atual.includes(id) ? atual.filter((u) => u !== id) : [...atual, id]));
+    }
+  }
+
+  async function salvarEdicaoUsuario(e) {
+    e.preventDefault();
+    setSalvandoEdicao(true);
+    const { data: sessao } = await supabase.auth.getSession();
+    const resposta = await fetch("/api/editar-usuario", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${sessao.session.access_token}` },
+      body: JSON.stringify({
+        usuarioId: usuarioEditando.id,
+        nome: edNome,
+        sobrenome: edSobrenome,
+        cargo: edCargo,
+        unidadeIds: edAcessoTodas ? [] : edUnidadeIds,
+      }),
+    });
+    const resultado = await resposta.json();
+    setSalvandoEdicao(false);
+    if (!resposta.ok) {
+      alert("Erro ao editar usuário: " + resultado.erro);
+      return;
+    }
+    setUsuarioEditando(null);
     carregar();
   }
 
@@ -201,7 +254,9 @@ function Conteudo() {
             </span>
             <div className="flex items-center gap-3">
               <span className="text-xs text-gold font-medium">{rotuloCargo(u.cargo)}</span>
-              <button className="btn text-xs" onClick={() => alert("Edição de dados do usuário: próxima melhoria planejada.")}>Editar</button>
+              {podeEditarUsuario && (
+                <button className="btn text-xs" onClick={() => abrirEdicao(u)}>Editar</button>
+              )}
               <button className="btn text-xs" onClick={() => resetarSenha(u.id)}>Resetar senha</button>
               <button className={`btn text-xs ${u.ativo ? "text-danger" : "text-teal"}`} onClick={() => alternarBloqueio(u)}>
                 {u.ativo ? "Bloquear" : "Desbloquear"}
@@ -240,6 +295,74 @@ function Conteudo() {
               <button className="btn-primary" onClick={() => setUsuarioCriado(null)}>Entendi</button>
             </div>
           </div>
+        </Modal>
+      )}
+
+      {usuarioEditando && (
+        <Modal titulo={`Editar ${usuarioEditando.nome_completo}`} subtitulo="Alterar nome, login, cargo ou unidades" onFechar={() => setUsuarioEditando(null)}>
+          <form onSubmit={salvarEdicaoUsuario} className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="field-label">Nome</label>
+                <input className="field-input" value={edNome} onChange={(e) => setEdNome(e.target.value.toUpperCase())} required />
+              </div>
+              <div>
+                <label className="field-label">Sobrenome</label>
+                <input className="field-input" value={edSobrenome} onChange={(e) => setEdSobrenome(e.target.value.toUpperCase())} required />
+              </div>
+            </div>
+
+            {edNome && edSobrenome && (
+              <p className="text-xs text-muted">
+                Novo login: <span className="font-mono-num text-ink">{`${edNome.toLowerCase()}.${edSobrenome.toLowerCase()}`.replace(/\s/g, "")}</span>
+              </p>
+            )}
+
+            <div>
+              <label className="field-label">Cargo</label>
+              <select className="field-input" value={edCargo} onChange={(e) => setEdCargo(e.target.value)}>
+                {Object.values(CARGOS).map((c) => (
+                  <option key={c} value={c}>{CARGO_LABELS[c]}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="field-label">Unidades autorizadas</label>
+              {edAcessoTodas ? (
+                <p className="text-sm text-gold bg-gold-soft/40 rounded-lg px-3 py-2">
+                  {rotuloCargo(edCargo)} tem acesso automático a todas as unidades.
+                </p>
+              ) : (
+                <div className="grid grid-cols-4 gap-2 max-h-52 overflow-y-auto">
+                  {unidades.map((u) => {
+                    const marcado = edUnidadeIds.includes(u.id);
+                    return (
+                      <label key={u.id} className={`checkbox-tile ${marcado ? "is-checked" : ""}`}>
+                        <input
+                          type={edLimite === 1 ? "radio" : "checkbox"}
+                          checked={marcado}
+                          onChange={() => edAlternarUnidade(u.id)}
+                          className="sr-only"
+                        />
+                        <span className={`w-4 h-4 rounded flex items-center justify-center shrink-0 border ${marcado ? "bg-gold border-gold" : "border-line bg-white"}`}>
+                          {marcado && <Check size={12} strokeWidth={3} className="text-white" />}
+                        </span>
+                        <span className="truncate">{u.nome}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <button type="button" className="btn" onClick={() => setUsuarioEditando(null)}>Cancelar</button>
+              <button type="submit" className="btn-primary" disabled={salvandoEdicao}>
+                {salvandoEdicao ? "Salvando…" : "Salvar alterações"}
+              </button>
+            </div>
+          </form>
         </Modal>
       )}
     </div>
