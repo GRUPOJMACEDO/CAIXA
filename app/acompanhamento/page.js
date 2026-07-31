@@ -15,20 +15,27 @@ const MODOS = [
   { id: "mensal", rotulo: "Mensal" },
 ];
 
-function numeroSemanaISO(data) {
-  const d = new Date(Date.UTC(data.getFullYear(), data.getMonth(), data.getDate()));
-  const diaSemana = d.getUTCDay() || 7;
-  d.setUTCDate(d.getUTCDate() + 4 - diaSemana);
-  const inicioAno = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-  return Math.ceil(((d - inicioAno) / 86400000 + 1) / 7);
+function aISO(d) {
+  const ano = d.getFullYear();
+  const mes = String(d.getMonth() + 1).padStart(2, "0");
+  const dia = String(d.getDate()).padStart(2, "0");
+  return `${ano}-${mes}-${dia}`;
 }
 
+// semana domingo → sábado
 function inicioDaSemana(data) {
   const d = new Date(data);
-  const diaSemana = (d.getDay() + 6) % 7;
-  d.setDate(d.getDate() - diaSemana);
   d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() - d.getDay()); // getDay(): domingo = 0
   return d;
+}
+
+function numeroSemanaDomingo(data) {
+  const inicioAno = new Date(data.getFullYear(), 0, 1);
+  const inicioSemanaAno = inicioDaSemana(inicioAno);
+  const inicioSemanaAtual = inicioDaSemana(data);
+  const diffDias = Math.round((inicioSemanaAtual - inicioSemanaAno) / 86400000);
+  return Math.floor(diffDias / 7) + 1;
 }
 
 const MESES_ABREV = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
@@ -42,7 +49,9 @@ function gerarBaldes(modo) {
     for (let i = 29; i >= 0; i--) {
       const d = new Date(hoje);
       d.setDate(d.getDate() - i);
-      baldes.push({ inicio: d, fim: new Date(d.getTime() + 86400000), rotulo: d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }) });
+      const fim = new Date(d);
+      fim.setDate(fim.getDate() + 1);
+      baldes.push({ inicioStr: aISO(d), fimStr: aISO(fim), rotulo: d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }) });
     }
   } else if (modo === "semanal") {
     const semanaAtual = inicioDaSemana(hoje);
@@ -51,13 +60,13 @@ function gerarBaldes(modo) {
       inicio.setDate(inicio.getDate() - i * 7);
       const fim = new Date(inicio);
       fim.setDate(fim.getDate() + 7);
-      baldes.push({ inicio, fim, rotulo: `W${numeroSemanaISO(inicio)}` });
+      baldes.push({ inicioStr: aISO(inicio), fimStr: aISO(fim), rotulo: `W${numeroSemanaDomingo(inicio)}` });
     }
   } else {
     for (let i = 11; i >= 0; i--) {
       const inicio = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1);
       const fim = new Date(hoje.getFullYear(), hoje.getMonth() - i + 1, 1);
-      baldes.push({ inicio, fim, rotulo: `${MESES_ABREV[inicio.getMonth()]}/${String(inicio.getFullYear()).slice(2)}` });
+      baldes.push({ inicioStr: aISO(inicio), fimStr: aISO(fim), rotulo: `${MESES_ABREV[inicio.getMonth()]}/${String(inicio.getFullYear()).slice(2)}` });
     }
   }
   return baldes;
@@ -86,7 +95,7 @@ function Conteudo() {
       .from("lancamentos")
       .select("unidade_id, data, valor_pago")
       .in("unidade_id", selecionadas)
-      .gte("data", baldes[0].inicio.toISOString().slice(0, 10))
+      .gte("data", baldes[0].inicioStr)
       .then(({ data }) => {
         setLancamentos(data || []);
         setCarregando(false);
@@ -103,7 +112,7 @@ function Conteudo() {
       selecionadas.forEach((unidadeId) => {
         const unidade = unidades.find((u) => u.id === unidadeId);
         const total = lancamentos
-          .filter((l) => l.unidade_id === unidadeId && new Date(l.data) >= b.inicio && new Date(l.data) < b.fim)
+          .filter((l) => l.unidade_id === unidadeId && l.data >= b.inicioStr && l.data < b.fimStr)
           .reduce((s, l) => s + Number(l.valor_pago), 0);
         linha[unidade?.nome || unidadeId] = total;
       });
