@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import AppShell from "../../../components/AppShell";
+import Modal from "../../../components/Modal";
 import { Check } from "lucide-react";
 import { supabase } from "../../../lib/supabaseClient";
 import { useSessao } from "../../../lib/SessaoContext";
@@ -24,6 +25,7 @@ function Conteudo() {
   const [sobrenome, setSobrenome] = useState("");
   const [cargo, setCargo] = useState(CARGOS.OPERACIONAL);
   const [unidadeIds, setUnidadeIds] = useState([]);
+  const [usuarioCriado, setUsuarioCriado] = useState(null); // { login, senha }
 
   const acessoTodas = podeVerTodasUnidades(cargo);
   const limite = limiteUnidadesPorCargo(cargo);
@@ -66,7 +68,7 @@ function Conteudo() {
       alert("Erro ao criar usuário: " + resultado.erro);
       return;
     }
-    alert(`Usuário criado!\nLogin: ${resultado.login}\nSenha inicial: ${resultado.senhaInicial}\n(o usuário será obrigado a trocar no primeiro acesso)`);
+    setUsuarioCriado({ login: resultado.login, senha: resultado.senhaInicial });
     setNome("");
     setSobrenome("");
     setUnidadeIds([]);
@@ -208,6 +210,38 @@ function Conteudo() {
           </div>
         ))}
       </div>
+
+      {usuarioCriado && (
+        <Modal titulo="Usuário criado com sucesso" onFechar={() => setUsuarioCriado(null)}>
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <div>
+                <p className="text-xs text-muted">Login</p>
+                <p className="font-mono-num font-medium">{usuarioCriado.login}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted">Senha inicial</p>
+                <p className="font-mono-num font-medium">{usuarioCriado.senha}</p>
+              </div>
+            </div>
+            <p className="text-xs text-muted">O usuário será obrigado a trocar a senha no primeiro acesso.</p>
+            <div className="rounded-lg bg-canvas p-3 text-sm">
+              <p className="text-xs text-muted mb-1">Link de acesso ao sistema — envie para o novo usuário:</p>
+              <a
+                href={typeof window !== "undefined" ? `${window.location.origin}/login` : "/login"}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-gold font-medium underline break-all"
+              >
+                {typeof window !== "undefined" ? `${window.location.origin}/login` : "/login"}
+              </a>
+            </div>
+            <div className="flex justify-end">
+              <button className="btn-primary" onClick={() => setUsuarioCriado(null)}>Entendi</button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

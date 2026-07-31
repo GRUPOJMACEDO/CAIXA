@@ -1,7 +1,7 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard,
   ReceiptText,
@@ -23,6 +23,9 @@ import {
   Home,
   Search,
   FileSpreadsheet,
+  DollarSign,
+  UserCheck,
+  Cable,
 } from "lucide-react";
 import BotaoModoClaroEscuro from "./BotaoModoClaroEscuro";
 import SinoSolicitacoesSenha from "./SinoSolicitacoesSenha";
@@ -43,9 +46,14 @@ export const NAV_OPERACAO = [
   { href: "/lancamento", label: "Lançamento", icon: ReceiptText, descricao: "Registrar um novo pagamento de ordem de serviço." },
   { href: "/consulta", label: "Consulta", icon: Search, descricao: "Buscar lançamentos por OS, data ou categoria." },
   { href: "/contas-a-receber", label: "Contas a receber", icon: Wallet, descricao: "OS com saldo em aberto, aguardando quitação." },
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, descricao: "Resultado do mês, por unidade, com ranking." },
   { href: "/acompanhamento", label: "Acompanhamento", icon: TrendingUp, descricao: "Evolução das vendas: diário, semanal ou mensal." },
   { href: "/relatorios", label: "Relatórios", icon: FileSpreadsheet, descricao: "Exportar os dados lançados para Excel." },
+];
+
+export const NAV_DASHBOARD = [
+  { href: "/dashboard", label: "Valores", icon: LayoutDashboard, descricao: "Resultado do mês, por unidade, com ranking." },
+  { href: "/dashboard/vendedores", label: "Vendedores", icon: UserCheck, descricao: "Ranking de vendas de acessórios por atendente." },
+  { href: "/dashboard/acessorios", label: "Acessórios", icon: Cable, descricao: "Vendas de acessórios por tipo de item." },
 ];
 
 export function navConfiguracoes(cargo) {
@@ -91,9 +99,8 @@ function SecaoNav({ titulo, hrefHub, icone: Icone, itens, pathname, recolhido, a
       <div className="flex items-center justify-between px-3 mb-2">
         <Link
           href={hrefHub}
-          className={`text-[11px] uppercase tracking-wider flex items-center gap-1.5 transition ${
-            pathname === hrefHub ? "text-gold font-semibold" : "text-muted hover:text-ink"
-          }`}
+          className="text-[11px] uppercase tracking-wider flex items-center gap-1.5 transition font-bold"
+          style={{ color: "#1B3A5C" }}
         >
           {Icone && <Icone size={11} />}{titulo}
         </Link>
@@ -112,11 +119,29 @@ function SecaoNav({ titulo, hrefHub, icone: Icone, itens, pathname, recolhido, a
   );
 }
 
+function secaoDaRota(pathname) {
+  if (NAV_OPERACAO.some((i) => i.href === pathname) || pathname === "/operacao") return "operacao";
+  if (NAV_DASHBOARD.some((i) => i.href === pathname)) return "dashboard";
+  if (pathname.startsWith("/configuracoes")) return "configuracoes";
+  return null;
+}
+
 function Shell({ children }) {
   const pathname = usePathname();
+  const router = useRouter();
   const { usuario, sair } = useSessao();
-  const [recolhido, setRecolhido] = useState(false);
-  const [secaoAberta, setSecaoAberta] = useState("operacao");
+  const [recolhido, setRecolhido] = useState(true); // menu inicia recolhido, por padrão
+  const [secaoAberta, setSecaoAberta] = useState(null);
+  const ignorarProximaAutoAbertura = useRef(false);
+
+  // ao navegar, abre automaticamente só a seção onde a página atual está
+  useEffect(() => {
+    if (ignorarProximaAutoAbertura.current) {
+      ignorarProximaAutoAbertura.current = false;
+      return;
+    }
+    setSecaoAberta(secaoDaRota(pathname));
+  }, [pathname]);
 
   if (!usuario) {
     return (
@@ -128,10 +153,16 @@ function Shell({ children }) {
 
   const largura = recolhido ? "w-[72px]" : "w-64";
   const itensConfig = navConfiguracoes(usuario.cargo);
-  const todosItens = [...NAV_OPERACAO, ...itensConfig];
+  const todosItens = [...NAV_OPERACAO, ...NAV_DASHBOARD, ...itensConfig];
   const tituloAtual =
     todosItens.find((i) => i.href === pathname)?.label ||
     (pathname === "/operacao" ? "Operação" : pathname === "/configuracoes" ? "Configurações" : "");
+
+  function irParaInicio() {
+    ignorarProximaAutoAbertura.current = true;
+    setSecaoAberta(null);
+    router.push("/dashboard");
+  }
 
   return (
     <div className="min-h-screen flex bg-canvas">
@@ -151,6 +182,17 @@ function Shell({ children }) {
             onToggle={() => setSecaoAberta((s) => (s === "operacao" ? null : "operacao"))}
           />
 
+          <SecaoNav
+            titulo="Dashboard"
+            hrefHub="/dashboard"
+            icone={DollarSign}
+            itens={NAV_DASHBOARD}
+            pathname={pathname}
+            recolhido={recolhido}
+            aberta={secaoAberta === "dashboard"}
+            onToggle={() => setSecaoAberta((s) => (s === "dashboard" ? null : "dashboard"))}
+          />
+
           {temAcessoConfiguracoes(usuario.cargo) && (
             <SecaoNav
               titulo="Configurações"
@@ -165,7 +207,7 @@ function Shell({ children }) {
           )}
 
           <div>
-            {!recolhido && <p className="px-3 text-[11px] uppercase tracking-wider text-muted mb-2">Painel</p>}
+            {!recolhido && <p className="px-3 text-[11px] uppercase tracking-wider font-bold mb-2" style={{ color: "#1B3A5C" }}>Painel</p>}
             <a
               href="/painel"
               target="_blank"
@@ -201,9 +243,9 @@ function Shell({ children }) {
       <div className="flex-1 min-w-0">
         <header className="h-14 border-b border-line bg-panel/95 backdrop-blur px-6 flex items-center justify-between sticky top-0 z-10">
           <div className="flex items-center gap-3">
-            <Link href="/dashboard" title="Ir para o Dashboard" className="text-muted hover:text-gold transition">
+            <button onClick={irParaInicio} title="Ir para o início" className="text-muted hover:text-gold transition">
               <Home size={17} />
-            </Link>
+            </button>
             <div className="w-px h-5 bg-line" />
             <p className="text-sm font-medium text-ink">{tituloAtual}</p>
           </div>
