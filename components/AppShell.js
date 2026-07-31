@@ -1,0 +1,232 @@
+"use client";
+import { useState } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import {
+  LayoutDashboard,
+  ReceiptText,
+  Wallet,
+  Store,
+  Users,
+  Wrench,
+  Boxes,
+  Tags,
+  Target,
+  Tv,
+  LogOut,
+  Settings,
+  ChevronsLeft,
+  ChevronsRight,
+  ChevronDown,
+  TrendingUp,
+  ScrollText,
+  Home,
+  Search,
+  FileSpreadsheet,
+} from "lucide-react";
+import BotaoModoClaroEscuro from "./BotaoModoClaroEscuro";
+import SinoSolicitacoesSenha from "./SinoSolicitacoesSenha";
+import { SessaoProvider, useSessao } from "../lib/SessaoContext";
+import {
+  rotuloCargo,
+  podeConfigTiposServico,
+  podeConfigCategorias,
+  podeConfigModelos,
+  podeConfigUnidades,
+  podeConfigUsuarios,
+  podeConfigMetas,
+  temAcessoConfiguracoes,
+  podeVerLogAuditoria,
+} from "../lib/permissions";
+
+export const NAV_OPERACAO = [
+  { href: "/lancamento", label: "Lançamento", icon: ReceiptText, descricao: "Registrar um novo pagamento de ordem de serviço." },
+  { href: "/consulta", label: "Consulta", icon: Search, descricao: "Buscar lançamentos por OS, data ou categoria." },
+  { href: "/contas-a-receber", label: "Contas a receber", icon: Wallet, descricao: "OS com saldo em aberto, aguardando quitação." },
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, descricao: "Resultado do mês, por unidade, com ranking." },
+  { href: "/acompanhamento", label: "Acompanhamento", icon: TrendingUp, descricao: "Evolução das vendas: diário, semanal ou mensal." },
+  { href: "/relatorios", label: "Relatórios", icon: FileSpreadsheet, descricao: "Exportar os dados lançados para Excel." },
+];
+
+export function navConfiguracoes(cargo) {
+  const itens = [];
+  if (podeConfigTiposServico(cargo)) itens.push({ href: "/configuracoes/tipos-servico", label: "Tipos de serviço", icon: Wrench, descricao: "Cadastro dos tipos de serviço prestados." });
+  if (podeConfigCategorias(cargo)) itens.push({ href: "/configuracoes/categorias", label: "Categorias", icon: Tags, descricao: "Categorias de produto (Celular, TV, Tablet...)." });
+  if (podeConfigModelos(cargo)) itens.push({ href: "/configuracoes/modelos", label: "Modelos", icon: Boxes, descricao: "Modelos de produto atendidos, por categoria." });
+  if (podeConfigUnidades(cargo)) itens.push({ href: "/configuracoes/unidades", label: "Unidades", icon: Store, descricao: "Lojas do grupo e seus códigos internos." });
+  if (podeConfigUsuarios(cargo)) itens.push({ href: "/configuracoes/usuarios", label: "Usuários", icon: Users, descricao: "Logins, cargos e unidades autorizadas." });
+  if (podeConfigMetas(cargo)) itens.push({ href: "/configuracoes/metas", label: "Metas", icon: Target, descricao: "Meta mensal de cada unidade." });
+  if (podeVerLogAuditoria(cargo)) itens.push({ href: "/configuracoes/log", label: "Log do sistema", icon: ScrollText, descricao: "Histórico de alterações no sistema." });
+  return itens;
+}
+
+function ItemNav({ item, ativo, recolhido }) {
+  const Icone = item.icon;
+  return (
+    <Link
+      href={item.href}
+      title={recolhido ? item.label : undefined}
+      className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition
+        ${ativo ? "bg-gold/15 text-gold font-medium" : "text-muted hover:bg-ink/5 hover:text-ink"}
+        ${recolhido ? "justify-center" : ""}`}
+    >
+      <Icone size={16} strokeWidth={2} className="shrink-0" />
+      {!recolhido && item.label}
+    </Link>
+  );
+}
+
+function SecaoNav({ titulo, hrefHub, icone: Icone, itens, pathname, recolhido, aberta, onToggle }) {
+  if (recolhido) {
+    return (
+      <div className="space-y-0.5">
+        {itens.map((item) => (
+          <ItemNav key={item.href} item={item} ativo={pathname === item.href} recolhido={recolhido} />
+        ))}
+      </div>
+    );
+  }
+  return (
+    <div>
+      <div className="flex items-center justify-between px-3 mb-2">
+        <Link
+          href={hrefHub}
+          className={`text-[11px] uppercase tracking-wider flex items-center gap-1.5 transition ${
+            pathname === hrefHub ? "text-gold font-semibold" : "text-muted hover:text-ink"
+          }`}
+        >
+          {Icone && <Icone size={11} />}{titulo}
+        </Link>
+        <button onClick={onToggle} className="text-muted hover:text-ink p-0.5">
+          <ChevronDown size={12} className={`transition-transform ${aberta ? "" : "-rotate-90"}`} />
+        </button>
+      </div>
+      {aberta && (
+        <div className="space-y-0.5">
+          {itens.map((item) => (
+            <ItemNav key={item.href} item={item} ativo={pathname === item.href} recolhido={recolhido} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Shell({ children }) {
+  const pathname = usePathname();
+  const { usuario, sair } = useSessao();
+  const [recolhido, setRecolhido] = useState(false);
+  const [secaoAberta, setSecaoAberta] = useState("operacao");
+
+  if (!usuario) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-canvas text-muted text-sm">
+        Carregando…
+      </div>
+    );
+  }
+
+  const largura = recolhido ? "w-[72px]" : "w-64";
+  const itensConfig = navConfiguracoes(usuario.cargo);
+  const todosItens = [...NAV_OPERACAO, ...itensConfig];
+  const tituloAtual =
+    todosItens.find((i) => i.href === pathname)?.label ||
+    (pathname === "/operacao" ? "Operação" : pathname === "/configuracoes" ? "Configurações" : "");
+
+  return (
+    <div className="min-h-screen flex bg-canvas">
+      <aside className={`${largura} shrink-0 bg-sidebar border-r border-line text-ink flex flex-col sticky top-0 h-screen transition-all duration-200`}>
+        <div className={`${recolhido ? "px-3 py-4 flex justify-center" : "px-4 py-3"} border-b border-line`}>
+          <img src="/logos/grupo-jmacedo.png" alt="Grupo J.Macedo Eletrônica" className={recolhido ? "h-10 w-auto" : "w-full h-auto"} />
+        </div>
+
+        <nav className="flex-1 px-2.5 py-4 space-y-5 overflow-y-auto">
+          <SecaoNav
+            titulo="Operação"
+            hrefHub="/operacao"
+            itens={NAV_OPERACAO}
+            pathname={pathname}
+            recolhido={recolhido}
+            aberta={secaoAberta === "operacao"}
+            onToggle={() => setSecaoAberta((s) => (s === "operacao" ? null : "operacao"))}
+          />
+
+          {temAcessoConfiguracoes(usuario.cargo) && (
+            <SecaoNav
+              titulo="Configurações"
+              hrefHub="/configuracoes"
+              icone={Settings}
+              itens={itensConfig}
+              pathname={pathname}
+              recolhido={recolhido}
+              aberta={secaoAberta === "configuracoes"}
+              onToggle={() => setSecaoAberta((s) => (s === "configuracoes" ? null : "configuracoes"))}
+            />
+          )}
+
+          <div>
+            {!recolhido && <p className="px-3 text-[11px] uppercase tracking-wider text-muted mb-2">Painel</p>}
+            <a
+              href="/painel"
+              target="_blank"
+              rel="noopener noreferrer"
+              title={recolhido ? "Abrir painel de TV" : undefined}
+              className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-muted hover:bg-ink/5 hover:text-ink transition ${recolhido ? "justify-center" : ""}`}
+            >
+              <Tv size={16} strokeWidth={2} className="shrink-0" />
+              {!recolhido && "Abrir painel de TV"}
+            </a>
+          </div>
+        </nav>
+
+        <div className="px-2.5 py-4 border-t border-line">
+          <button
+            onClick={sair}
+            title={recolhido ? "Sair" : undefined}
+            className={`w-full flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-muted hover:bg-ink/5 hover:text-ink transition ${recolhido ? "justify-center" : ""}`}
+          >
+            <LogOut size={16} strokeWidth={2} className="shrink-0" />
+            {!recolhido && "Sair"}
+          </button>
+          <button
+            onClick={() => setRecolhido((r) => !r)}
+            className={`w-full flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-muted/70 hover:bg-ink/5 hover:text-ink transition mt-0.5 ${recolhido ? "justify-center" : ""}`}
+          >
+            {recolhido ? <ChevronsRight size={16} /> : <ChevronsLeft size={16} />}
+            {!recolhido && "Recolher menu"}
+          </button>
+        </div>
+      </aside>
+
+      <div className="flex-1 min-w-0">
+        <header className="h-14 border-b border-line bg-panel/95 backdrop-blur px-6 flex items-center justify-between sticky top-0 z-10">
+          <div className="flex items-center gap-3">
+            <Link href="/dashboard" title="Ir para o Dashboard" className="text-muted hover:text-gold transition">
+              <Home size={17} />
+            </Link>
+            <div className="w-px h-5 bg-line" />
+            <p className="text-sm font-medium text-ink">{tituloAtual}</p>
+          </div>
+          <div className="flex items-center gap-4">
+            <div className="text-right">
+              <p className="text-sm font-medium text-ink leading-tight">{usuario.nome_completo}</p>
+              <p className="text-xs text-muted leading-tight">{rotuloCargo(usuario.cargo)}</p>
+            </div>
+            <div className="w-px h-8 bg-line" />
+            <SinoSolicitacoesSenha usuario={usuario} />
+            <BotaoModoClaroEscuro topbar />
+          </div>
+        </header>
+        <main className="p-6 max-w-full overflow-x-hidden">{children}</main>
+      </div>
+    </div>
+  );
+}
+
+export default function AppShell({ children }) {
+  return (
+    <SessaoProvider>
+      <Shell>{children}</Shell>
+    </SessaoProvider>
+  );
+}

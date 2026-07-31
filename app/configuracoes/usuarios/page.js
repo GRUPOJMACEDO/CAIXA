@@ -1,0 +1,221 @@
+"use client";
+import { useEffect, useState } from "react";
+import AppShell from "../../../components/AppShell";
+import { Check } from "lucide-react";
+import { supabase } from "../../../lib/supabaseClient";
+import { useSessao } from "../../../lib/SessaoContext";
+import {
+  podeConfigUsuarios,
+  CARGOS,
+  CARGO_LABELS,
+  rotuloCargo,
+  limiteUnidadesPorCargo,
+  podeVerTodasUnidades,
+} from "../../../lib/permissions";
+
+const SENHA_PADRAO = "jmacedo001";
+
+function Conteudo() {
+  const { usuario } = useSessao();
+  const [usuarios, setUsuarios] = useState([]);
+  const [unidades, setUnidades] = useState([]);
+
+  const [nome, setNome] = useState("");
+  const [sobrenome, setSobrenome] = useState("");
+  const [cargo, setCargo] = useState(CARGOS.OPERACIONAL);
+  const [unidadeIds, setUnidadeIds] = useState([]);
+
+  const acessoTodas = podeVerTodasUnidades(cargo);
+  const limite = limiteUnidadesPorCargo(cargo);
+
+  async function carregar() {
+    const { data: us } = await supabase.from("usuarios").select("*").order("nome_completo");
+    setUsuarios(us || []);
+    const { data: uns } = await supabase.from("unidades").select("*").order("nome");
+    setUnidades(uns || []);
+  }
+
+  useEffect(() => {
+    carregar();
+  }, []);
+
+  useEffect(() => {
+    // ao trocar o cargo, ajusta a seleção de unidades às regras do cargo
+    if (acessoTodas) setUnidadeIds([]);
+    else if (limite === 1 && unidadeIds.length > 1) setUnidadeIds(unidadeIds.slice(0, 1));
+  }, [cargo]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function alternarUnidade(id) {
+    if (limite === 1) {
+      setUnidadeIds([id]);
+    } else {
+      setUnidadeIds((atual) => (atual.includes(id) ? atual.filter((u) => u !== id) : [...atual, id]));
+    }
+  }
+
+  async function salvar(e) {
+    e.preventDefault();
+    const { data: sessao } = await supabase.auth.getSession();
+    const resposta = await fetch("/api/criar-usuario", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${sessao.session.access_token}` },
+      body: JSON.stringify({ nome, sobrenome, cargo, unidadeIds: acessoTodas ? [] : unidadeIds }),
+    });
+    const resultado = await resposta.json();
+    if (!resposta.ok) {
+      alert("Erro ao criar usuário: " + resultado.erro);
+      return;
+    }
+    alert(`Usuário criado!\nLogin: ${resultado.login}\nSenha inicial: ${resultado.senhaInicial}\n(o usuário será obrigado a trocar no primeiro acesso)`);
+    setNome("");
+    setSobrenome("");
+    setUnidadeIds([]);
+    carregar();
+  }
+
+  async function alternarBloqueio(usuarioAlvo) {
+    const bloquear = usuarioAlvo.ativo;
+    if (!window.confirm(bloquear ? `Bloquear o acesso de ${usuarioAlvo.nome_completo}?` : `Liberar o acesso de ${usuarioAlvo.nome_completo}?`)) return;
+    const { data: sessao } = await supabase.auth.getSession();
+    const resposta = await fetch("/api/bloquear-usuario", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${sessao.session.access_token}` },
+      body: JSON.stringify({ usuarioId: usuarioAlvo.id, bloquear }),
+    });
+    const resultado = await resposta.json();
+    if (!resposta.ok) {
+      alert("Erro: " + resultado.erro);
+      return;
+    }
+    carregar();
+  }
+
+  async function resetarSenha(usuarioId) {
+    if (!window.confirm("Redefinir a senha deste usuário para o padrão inicial?")) return;
+    const { data: sessao } = await supabase.auth.getSession();
+    const resposta = await fetch("/api/resetar-senha", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${sessao.session.access_token}` },
+      body: JSON.stringify({ usuarioId }),
+    });
+    const resultado = await resposta.json();
+    if (!resposta.ok) {
+      alert("Erro ao redefinir senha: " + resultado.erro);
+      return;
+    }
+    alert(`Senha redefinida para: ${resultado.senhaInicial}\nO usuário será obrigado a trocar no próximo acesso.`);
+  }
+
+  const permitido = podeConfigUsuarios(usuario.cargo);
+  if (!permitido) {
+    return <p className="text-sm text-muted">Somente Supervisão, Gerência, Administrador ou Diretor acessam o cadastro de usuários.</p>;
+  }
+
+  return (
+    <div className="max-w-4xl">
+      <div className="mb-6">
+        <p className="text-xs uppercase tracking-wider text-muted mb-1">Configurações</p>
+        <h1 className="font-display text-2xl font-semibold text-ink">Usuários</h1>
+        <p className="text-sm text-muted mt-1">{usuarios.length} usuários cadastrados · senha inicial padrão: <span className="font-mono-num">{SENHA_PADRAO}</span></p>
+      </div>
+
+      <form onSubmit={salvar} className="card p-5 mb-6 space-y-4">
+        <div className="grid grid-cols-3 gap-3">
+          <div>
+            <label className="field-label">Nome</label>
+            <input className="field-input" value={nome} onChange={(e) => setNome(e.target.value.toUpperCase())} required />
+          </div>
+          <div>
+            <label className="field-label">Sobrenome</label>
+            <input className="field-input" value={sobrenome} onChange={(e) => setSobrenome(e.target.value.toUpperCase())} required />
+          </div>
+          <div>
+            <label className="field-label">Cargo</label>
+            <select className="field-input" value={cargo} onChange={(e) => setCargo(e.target.value)}>
+              {Object.values(CARGOS).map((c) => (
+                <option key={c} value={c}>{CARGO_LABELS[c]}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {nome && sobrenome && (
+          <p className="text-xs text-muted">
+            Login gerado: <span className="font-mono-num text-ink">{`${nome.toLowerCase()}.${sobrenome.toLowerCase()}`.replace(/\s/g, "")}</span>
+          </p>
+        )}
+
+        <div>
+          <label className="field-label">Unidades autorizadas</label>
+          {acessoTodas ? (
+            <p className="text-sm text-gold bg-gold-soft/40 rounded-lg px-3 py-2">
+              {rotuloCargo(cargo)} tem acesso automático a todas as unidades.
+            </p>
+          ) : (
+            <>
+              <p className="text-xs text-muted mb-2">
+                {limite === 1
+                  ? "Este cargo tem acesso a apenas 1 unidade — escolha uma."
+                  : "Marque uma ou mais lojas — para gerentes que cuidam de várias unidades."}
+              </p>
+              <div className="grid grid-cols-4 gap-2">
+                {unidades.map((u) => {
+                  const marcado = unidadeIds.includes(u.id);
+                  return (
+                    <label key={u.id} className={`checkbox-tile ${marcado ? "is-checked" : ""}`}>
+                      <input
+                        type={limite === 1 ? "radio" : "checkbox"}
+                        checked={marcado}
+                        onChange={() => alternarUnidade(u.id)}
+                        className="sr-only"
+                      />
+                      <span
+                        className={`w-4 h-4 rounded flex items-center justify-center shrink-0 border ${
+                          marcado ? "bg-gold border-gold" : "border-line bg-white"
+                        }`}
+                      >
+                        {marcado && <Check size={12} strokeWidth={3} className="text-white" />}
+                      </span>
+                      <span className="truncate">{u.nome}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </div>
+
+        <div className="flex justify-end">
+          <button className="btn-primary" type="submit">Criar usuário</button>
+        </div>
+      </form>
+
+      <div className="card divide-y divide-line">
+        {usuarios.map((u) => (
+          <div key={u.id} className={`p-3 flex justify-between items-center text-sm ${!u.ativo ? "opacity-50" : ""}`}>
+            <span>
+              {u.nome_completo} <span className="text-muted font-mono-num">· {u.login}</span>
+              {!u.ativo && <span className="text-danger text-xs ml-2">(bloqueado)</span>}
+            </span>
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-gold font-medium">{rotuloCargo(u.cargo)}</span>
+              <button className="btn text-xs" onClick={() => alert("Edição de dados do usuário: próxima melhoria planejada.")}>Editar</button>
+              <button className="btn text-xs" onClick={() => resetarSenha(u.id)}>Resetar senha</button>
+              <button className={`btn text-xs ${u.ativo ? "text-danger" : "text-teal"}`} onClick={() => alternarBloqueio(u)}>
+                {u.ativo ? "Bloquear" : "Desbloquear"}
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export default function CadastroUsuarios() {
+  return (
+    <AppShell>
+      <Conteudo />
+    </AppShell>
+  );
+}
