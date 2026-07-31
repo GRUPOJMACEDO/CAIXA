@@ -26,6 +26,7 @@ import {
   DollarSign,
   UserCheck,
   Cable,
+  Receipt,
 } from "lucide-react";
 import BotaoModoClaroEscuro from "./BotaoModoClaroEscuro";
 import SinoSolicitacoesSenha from "./SinoSolicitacoesSenha";
@@ -52,6 +53,7 @@ export const NAV_OPERACAO = [
 
 export const NAV_DASHBOARD = [
   { href: "/dashboard", label: "Valores", icon: LayoutDashboard, descricao: "Resultado do mês, por unidade, com ranking." },
+  { href: "/dashboard/ow", label: "Orçamentos (OW)", icon: Receipt, descricao: "Todas as vendas do mês, por unidade — exceto acessórios." },
   { href: "/dashboard/vendedores", label: "Vendedores", icon: UserCheck, descricao: "Ranking de vendas de acessórios por atendente." },
   { href: "/dashboard/acessorios", label: "Acessórios", icon: Cable, descricao: "Vendas de acessórios por tipo de item." },
 ];

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "../../../lib/supabaseAdmin";
+import { gerarLogin } from "../../../lib/textoUtil";
 
 const CARGOS_PODEM_EDITAR = ["administrador", "diretor"];
 
@@ -21,7 +22,7 @@ export async function POST(request) {
     }
 
     const { usuarioId, nome, sobrenome, cargo, unidadeIds } = await request.json();
-    const login = `${nome}.${sobrenome}`.toLowerCase().replace(/\s/g, "");
+    const login = gerarLogin(nome, sobrenome);
     const email = `${login}@jmacedo.internal`;
 
     const { error: erroAuth } = await admin.auth.admin.updateUserById(usuarioId, { email });

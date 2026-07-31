@@ -5,6 +5,7 @@ import Modal from "../../../components/Modal";
 import { Check } from "lucide-react";
 import { supabase } from "../../../lib/supabaseClient";
 import { useSessao } from "../../../lib/SessaoContext";
+import { gerarLogin } from "../../../lib/textoUtil";
 import {
   podeConfigUsuarios,
   CARGOS,
@@ -196,7 +197,7 @@ function Conteudo() {
 
         {nome && sobrenome && (
           <p className="text-xs text-muted">
-            Login gerado: <span className="font-mono-num text-ink">{`${nome.toLowerCase()}.${sobrenome.toLowerCase()}`.replace(/\s/g, "")}</span>
+            Login gerado: <span className="font-mono-num text-ink">{gerarLogin(nome, sobrenome)}</span>
           </p>
         )}
 
@@ -314,7 +315,7 @@ function Conteudo() {
 
             {edNome && edSobrenome && (
               <p className="text-xs text-muted">
-                Novo login: <span className="font-mono-num text-ink">{`${edNome.toLowerCase()}.${edSobrenome.toLowerCase()}`.replace(/\s/g, "")}</span>
+                Novo login: <span className="font-mono-num text-ink">{gerarLogin(edNome, edSobrenome)}</span>
               </p>
             )}
 

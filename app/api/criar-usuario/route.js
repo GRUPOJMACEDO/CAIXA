@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "../../../lib/supabaseAdmin";
+import { gerarLogin } from "../../../lib/textoUtil";
 
 const SENHA_PADRAO = "jmacedo001";
 
@@ -23,7 +24,7 @@ export async function POST(request) {
     }
 
     const { nome, sobrenome, cargo, unidadeIds } = await request.json();
-    const login = `${nome}.${sobrenome}`.toLowerCase().replace(/\s/g, "");
+    const login = gerarLogin(nome, sobrenome);
     const email = `${login}@jmacedo.internal`;
 
     const { data: novoUsuario, error: erroAuth } = await admin.auth.admin.createUser({
