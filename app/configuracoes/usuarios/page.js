@@ -1,8 +1,9 @@
 "use client";
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import AppShell from "../../../components/AppShell";
 import Modal from "../../../components/Modal";
-import { Check, Copy, CopyCheck } from "lucide-react";
+import { Check, Copy, CopyCheck, FileSpreadsheet } from "lucide-react";
 import { supabase } from "../../../lib/supabaseClient";
 import { useSessao } from "../../../lib/SessaoContext";
 import { gerarLogin } from "../../../lib/textoUtil";
@@ -184,10 +185,15 @@ function Conteudo() {
 
   return (
     <div className="max-w-4xl">
-      <div className="mb-6">
-        <p className="text-xs uppercase tracking-wider text-muted mb-1">Configurações</p>
-        <h1 className="font-display text-2xl font-semibold text-ink">Usuários</h1>
-        <p className="text-sm text-muted mt-1">{usuarios.length} usuários cadastrados · senha inicial padrão: <span className="font-mono-num">{SENHA_PADRAO}</span></p>
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <p className="text-xs uppercase tracking-wider text-muted mb-1">Configurações</p>
+          <h1 className="font-display text-2xl font-semibold text-ink">Usuários</h1>
+          <p className="text-sm text-muted mt-1">{usuarios.length} usuários cadastrados · senha inicial padrão: <span className="font-mono-num">{SENHA_PADRAO}</span></p>
+        </div>
+        <Link href="/configuracoes/usuarios/relatorio" className="btn flex items-center gap-1.5 shrink-0">
+          <FileSpreadsheet size={14} /> Relatório por unidade
+        </Link>
       </div>
 
       <form onSubmit={salvar} className="card p-5 mb-6 space-y-4">
