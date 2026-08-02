@@ -31,7 +31,15 @@ function Conteudo() {
   }
 
   async function salvarEdicao(id) {
-    await supabase.from("categorias").update({ nome: nomeEdicao }).eq("id", id);
+    const { data, error } = await supabase.from("categorias").update({ nome: nomeEdicao }).eq("id", id).select();
+    if (error) {
+      alert("Erro ao salvar: " + error.message);
+      return;
+    }
+    if (!data || data.length === 0) {
+      alert("Não foi possível salvar — você não tem permissão para esta ação.");
+      return;
+    }
     setEditando(null);
     carregar();
   }
@@ -50,7 +58,15 @@ function Conteudo() {
       return;
     }
     if (!window.confirm(`Excluir a categoria "${categoria.nome}"?`)) return;
-    await supabase.from("categorias").delete().eq("id", categoria.id);
+    const { data, error } = await supabase.from("categorias").delete().eq("id", categoria.id).select();
+    if (error) {
+      alert("Erro ao excluir: " + error.message);
+      return;
+    }
+    if (!data || data.length === 0) {
+      alert("Não foi possível excluir — você não tem permissão para esta ação.");
+      return;
+    }
     carregar();
   }
 

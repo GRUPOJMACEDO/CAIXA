@@ -34,7 +34,15 @@ function Conteudo() {
   }
 
   async function salvarEdicao(id) {
-    await supabase.from("modelos").update({ nome: nomeEdicao.toUpperCase() }).eq("id", id);
+    const { data, error } = await supabase.from("modelos").update({ nome: nomeEdicao.toUpperCase() }).eq("id", id).select();
+    if (error) {
+      alert("Erro ao salvar: " + error.message);
+      return;
+    }
+    if (!data || data.length === 0) {
+      alert("Não foi possível salvar — você não tem permissão para esta ação.");
+      return;
+    }
     setEditando(null);
     carregar();
   }
@@ -46,7 +54,15 @@ function Conteudo() {
       return;
     }
     if (!window.confirm(`Excluir o modelo "${m.nome}"?`)) return;
-    await supabase.from("modelos").delete().eq("id", m.id);
+    const { data, error } = await supabase.from("modelos").delete().eq("id", m.id).select();
+    if (error) {
+      alert("Erro ao excluir: " + error.message);
+      return;
+    }
+    if (!data || data.length === 0) {
+      alert("Não foi possível excluir — você não tem permissão para esta ação.");
+      return;
+    }
     carregar();
   }
 
