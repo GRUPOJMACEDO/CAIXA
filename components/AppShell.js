@@ -27,6 +27,7 @@ import {
   UserCheck,
   Cable,
   Receipt,
+  DatabaseZap,
 } from "lucide-react";
 import BotaoModoClaroEscuro from "./BotaoModoClaroEscuro";
 import SinoSolicitacoesSenha from "./SinoSolicitacoesSenha";
@@ -41,6 +42,7 @@ import {
   podeConfigMetas,
   temAcessoConfiguracoes,
   podeVerLogAuditoria,
+  podeVerManutencao,
 } from "../lib/permissions";
 
 export const NAV_OPERACAO = [
@@ -67,6 +69,7 @@ export function navConfiguracoes(cargo) {
   if (podeConfigUsuarios(cargo)) itens.push({ href: "/configuracoes/usuarios", label: "Usuários", icon: Users, descricao: "Logins, cargos e unidades autorizadas." });
   if (podeConfigMetas(cargo)) itens.push({ href: "/configuracoes/metas", label: "Metas", icon: Target, descricao: "Meta mensal de cada unidade." });
   if (podeVerLogAuditoria(cargo)) itens.push({ href: "/configuracoes/log", label: "Log do sistema", icon: ScrollText, descricao: "Histórico de alterações no sistema." });
+  if (podeVerManutencao(cargo)) itens.push({ href: "/configuracoes/manutencao", label: "Manutenção do banco", icon: DatabaseZap, descricao: "Apagar dados de teste antes de usar o sistema de verdade." });
   return itens;
 }
 

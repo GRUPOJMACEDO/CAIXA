@@ -85,14 +85,20 @@ export default function PainelTV() {
   const ehAcessorios = periodo.tipo === "acessorios";
   const ehMeta = periodo.tipo === "meta";
 
-  const comMeta = unidadesRanking
-    .filter((u) => Number(u.meta_mes) > 0)
-    .map((u) => ({ ...u, percentual: (Number(u.total_mes) / Number(u.meta_mes)) * 100 }));
+  const comMeta = unidadesRanking.map((u) => ({
+    ...u,
+    percentual: Number(u.meta_mes) > 0 ? (Number(u.total_mes) / Number(u.meta_mes)) * 100 : null,
+  }));
 
   const ordenadas = ehAcessorios
     ? [...acessorios].sort((a, b) => b.total_vendido - a.total_vendido)
     : ehMeta
-    ? [...comMeta].sort((a, b) => b.percentual - a.percentual)
+    ? [...comMeta].sort((a, b) => {
+        if (a.percentual === null && b.percentual === null) return a.unidade_nome.localeCompare(b.unidade_nome);
+        if (a.percentual === null) return 1;
+        if (b.percentual === null) return -1;
+        return b.percentual - a.percentual;
+      })
     : [...unidadesRanking].sort((a, b) => b[periodo.chave] - a[periodo.chave]);
 
   const top3 = ordenadas.slice(0, 3);
@@ -135,16 +141,23 @@ export default function PainelTV() {
             {ehAcessorios && <p className="text-[1.5vh] text-muted mb-[0.4vh]">{item.unidade_nome}</p>}
 
             {ehMeta ? (
-              <>
-                <p className="font-mono-num text-[4vh] font-semibold leading-none">{item.percentual.toFixed(0)}%</p>
-                <div className="h-[0.9vh] bg-line rounded-full overflow-hidden mt-[0.8vh]">
-                  <div
-                    className="h-full rounded-full transition-[width]"
-                    style={{ width: `${Math.min(100, item.percentual)}%`, background: MEDALHAS[i]?.barra }}
-                  />
-                </div>
-                <p className="text-[1.4vh] text-muted mt-[0.6vh] font-mono-num">Meta: R$ {moedaCompacta(item.meta_mes)}</p>
-              </>
+              item.percentual === null ? (
+                <>
+                  <p className="font-display text-[2.4vh] font-semibold leading-none text-muted">— %</p>
+                  <p className="text-[1.4vh] text-muted mt-[0.8vh]">Meta não definida</p>
+                </>
+              ) : (
+                <>
+                  <p className="font-mono-num text-[4vh] font-semibold leading-none">{item.percentual.toFixed(0)}%</p>
+                  <div className="h-[0.9vh] bg-line rounded-full overflow-hidden mt-[0.8vh]">
+                    <div
+                      className="h-full rounded-full transition-[width]"
+                      style={{ width: `${Math.min(100, item.percentual)}%`, background: MEDALHAS[i]?.barra }}
+                    />
+                  </div>
+                  <p className="text-[1.4vh] text-muted mt-[0.6vh] font-mono-num">Meta: R$ {moedaCompacta(item.meta_mes)}</p>
+                </>
+              )
             ) : (
               <>
                 <p className="font-mono-num text-[4vh] font-semibold leading-none">R$ {moeda(ehAcessorios ? item.total_vendido : item[periodo.chave])}</p>
@@ -163,7 +176,7 @@ export default function PainelTV() {
 
       {ordenadas.length === 0 ? (
         <div className="rounded-xl2 border border-line bg-white p-8 text-center text-muted flex-1 flex items-center justify-center">
-          {ehMeta ? "Nenhuma unidade com meta definida para este mês." : "Sem dados neste período."}
+          Sem dados neste período.
         </div>
       ) : ehMeta ? (
         <div className="grid grid-cols-2 gap-[1.2vh] flex-1 min-h-0">
@@ -176,19 +189,28 @@ export default function PainelTV() {
               <div key={coluna} className="rounded-xl2 border border-line bg-white overflow-y-auto flex flex-col h-full">
                 {itensColuna.map((item, i) => {
                   const cor = CORES_UNIDADE[(offset + i + 3) % CORES_UNIDADE.length];
-                  const pct = Math.min(100, item.percentual);
+                  const semMeta = item.percentual === null;
+                  const pct = semMeta ? 0 : Math.min(100, item.percentual);
                   return (
                     <div key={item.unidade_id} className="flex-1 flex items-center gap-[1vh] px-[1.6vh] border-t border-line first:border-t-0">
                       <span className="text-muted font-mono-num text-[1.6vh] w-[2.6vh] shrink-0">{offset + i + 4}º</span>
-                      <span className="text-[1.7vh] w-[15vh] shrink-0 truncate">{item.unidade_nome}</span>
-                      <div className="flex-1 flex items-center gap-[0.8vh]">
-                        <div className="flex-1 h-[1.2vh] bg-canvas rounded-full overflow-hidden border border-line">
-                          <div className="h-full rounded-full transition-[width]" style={{ width: `${pct}%`, background: cor }} />
+                      <span className={`text-[1.7vh] w-[15vh] shrink-0 truncate ${semMeta ? "text-muted" : ""}`}>{item.unidade_nome}</span>
+                      {semMeta ? (
+                        <div className="flex-1 flex items-center">
+                          <span className="text-[1.5vh] text-muted italic">Meta não definida</span>
                         </div>
-                        <BandeiraQuadriculada size={13} />
-                      </div>
-                      <span className="font-mono-num text-[1.4vh] text-muted w-[6.5vh] text-right shrink-0">R$ {moedaCompacta(item.meta_mes)}</span>
-                      <span className="font-mono-num font-semibold text-[1.6vh] w-[5vh] text-right shrink-0">{item.percentual.toFixed(0)}%</span>
+                      ) : (
+                        <>
+                          <div className="flex-1 flex items-center gap-[0.8vh]">
+                            <div className="flex-1 h-[1.2vh] bg-canvas rounded-full overflow-hidden border border-line">
+                              <div className="h-full rounded-full transition-[width]" style={{ width: `${pct}%`, background: cor }} />
+                            </div>
+                            <BandeiraQuadriculada size={13} />
+                          </div>
+                          <span className="font-mono-num text-[1.4vh] text-muted w-[6.5vh] text-right shrink-0">R$ {moedaCompacta(item.meta_mes)}</span>
+                          <span className="font-mono-num font-semibold text-[1.6vh] w-[5vh] text-right shrink-0">{item.percentual.toFixed(0)}%</span>
+                        </>
+                      )}
                     </div>
                   );
                 })}
