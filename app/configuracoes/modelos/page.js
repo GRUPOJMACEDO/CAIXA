@@ -1,6 +1,6 @@
 "use client";
-import { useEffect, useState } from "react";
-import { Trash2 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Pencil, Trash2, Upload } from "lucide-react";
 import AppShell from "../../../components/AppShell";
 import { supabase } from "../../../lib/supabaseClient";
 import { useSessao } from "../../../lib/SessaoContext";
@@ -14,6 +14,9 @@ function Conteudo() {
   const [nomeModelo, setNomeModelo] = useState("");
   const [editando, setEditando] = useState(null);
   const [nomeEdicao, setNomeEdicao] = useState("");
+  const [importando, setImportando] = useState(false);
+  const [resumoImportacao, setResumoImportacao] = useState(null);
+  const inputArquivoRef = useRef(null);
 
   async function carregar() {
     const { data: c } = await supabase.from("categorias").select("*").order("nome");
@@ -28,7 +31,15 @@ function Conteudo() {
 
   async function salvarModelo(e) {
     e.preventDefault();
-    await supabase.from("modelos").insert({ categoria_id: categoriaId, nome: nomeModelo.toUpperCase() });
+    const { data, error } = await supabase.from("modelos").insert({ categoria_id: categoriaId, nome: nomeModelo.toUpperCase() }).select();
+    if (error) {
+      alert("Erro ao salvar: " + error.message);
+      return;
+    }
+    if (!data || data.length === 0) {
+      alert("Não foi possível salvar — você não tem permissão para esta ação.");
+      return;
+    }
     setNomeModelo("");
     carregar();
   }
@@ -66,8 +77,122 @@ function Conteudo() {
     carregar();
   }
 
+  async function aoEscolherArquivo(e) {
+    const arquivo = e.target.files?.[0];
+    if (!arquivo) return;
+    setImportando(true);
+    setResumoImportacao(null);
+
+    try {
+      const XLSX = await import("xlsx");
+      const buffer = await arquivo.arrayBuffer();
+      const workbook = XLSX.read(buffer, { type: "array" });
+      const planilha = workbook.Sheets[workbook.SheetNames[0]];
+      const linhas = XLSX.utils.sheet_to_json(planilha, { defval: "" });
+
+      // normaliza: aceita "Modelo"/"MODELO" e "Categoria"/"CATEGORIAS"
+      const registros = linhas
+        .map((l) => {
+          const chaveModelo = Object.keys(l).find((k) => k.toLowerCase().includes("modelo"));
+          const chaveCategoria = Object.keys(l).find((k) => k.toLowerCase().includes("categoria"));
+          return {
+            modelo: String(l[chaveModelo] || "").trim().toUpperCase(),
+            categoria: String(l[chaveCategoria] || "").trim(),
+          };
+        })
+        .filter((r) => r.modelo && r.categoria);
+
+      if (registros.length === 0) {
+        alert('Não encontrei dados válidos. A planilha precisa ter as colunas "Modelo" e "Categoria".');
+        setImportando(false);
+        return;
+      }
+
+      // categorias novas que não existem ainda
+      const categoriasExistentes = new Map(categorias.map((c) => [c.nome.toLowerCase(), c]));
+      const categoriasNovasNomes = [...new Set(registros.map((r) => r.categoria))].filter(
+        (nome) => !categoriasExistentes.has(nome.toLowerCase())
+      );
+
+      let categoriasParaCriar = [];
+      if (categoriasNovasNomes.length > 0) {
+        const confirmar = window.confirm(
+          `A planilha tem ${categoriasNovasNomes.length} categoria(s) que ainda não existem no cadastro:\n\n${categoriasNovasNomes.join(", ")}\n\nDeseja cadastrá-las automaticamente?`
+        );
+        if (confirmar) {
+          categoriasParaCriar = categoriasNovasNomes;
+        } else {
+          // ignora os modelos dessas categorias
+        }
+      }
+
+      let mapaCategorias = new Map(categoriasExistentes);
+      if (categoriasParaCriar.length > 0) {
+        const { data: criadas, error } = await supabase
+          .from("categorias")
+          .insert(categoriasParaCriar.map((nome) => ({ nome })))
+          .select();
+        if (error) {
+          alert("Erro ao criar categorias novas: " + error.message);
+          setImportando(false);
+          return;
+        }
+        criadas.forEach((c) => mapaCategorias.set(c.nome.toLowerCase(), c));
+      }
+
+      // busca modelos já existentes (categoria_id + nome) para não duplicar
+      const { data: modelosExistentes } = await supabase.from("modelos").select("nome, categoria_id");
+      const chavesExistentes = new Set((modelosExistentes || []).map((m) => `${m.categoria_id}::${m.nome.toUpperCase()}`));
+
+      const jaVistos = new Set();
+      const paraInserir = [];
+      let ignoradosSemCategoria = 0;
+      let ignoradosDuplicados = 0;
+
+      registros.forEach((r) => {
+        const cat = mapaCategorias.get(r.categoria.toLowerCase());
+        if (!cat) {
+          ignoradosSemCategoria++;
+          return;
+        }
+        const chave = `${cat.id}::${r.modelo}`;
+        if (chavesExistentes.has(chave) || jaVistos.has(chave)) {
+          ignoradosDuplicados++;
+          return;
+        }
+        jaVistos.add(chave);
+        paraInserir.push({ categoria_id: cat.id, nome: r.modelo });
+      });
+
+      // insere em lotes de 500
+      let inseridos = 0;
+      for (let i = 0; i < paraInserir.length; i += 500) {
+        const lote = paraInserir.slice(i, i + 500);
+        const { error } = await supabase.from("modelos").insert(lote);
+        if (error) {
+          alert(`Erro ao importar: ${error.message}\n(${inseridos} modelo(s) já foram salvos antes do erro)`);
+          break;
+        }
+        inseridos += lote.length;
+      }
+
+      setResumoImportacao({
+        total: registros.length,
+        inseridos,
+        duplicados: ignoradosDuplicados,
+        semCategoria: ignoradosSemCategoria,
+        categoriasCriadas: categoriasParaCriar.length,
+      });
+      carregar();
+    } catch (err) {
+      alert("Erro ao ler a planilha: " + err.message);
+    } finally {
+      setImportando(false);
+      if (inputArquivoRef.current) inputArquivoRef.current.value = "";
+    }
+  }
+
   const permitido = podeConfigModelos(usuario.cargo);
-  // exclusão: mesma regra usada em tipos de serviço (Gerência/Administrador/Diretor)
   const podeExcluirItem = podeConfigTiposServico(usuario.cargo);
 
   if (!permitido) {
@@ -76,11 +201,36 @@ function Conteudo() {
 
   return (
     <div className="max-w-2xl">
-      <div className="mb-6">
-        <p className="text-xs uppercase tracking-wider text-muted mb-1">Configurações</p>
-        <h1 className="font-display text-2xl font-semibold text-ink">Modelos</h1>
-        <p className="text-sm text-muted mt-1">{modelos.length} modelos cadastrados</p>
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <p className="text-xs uppercase tracking-wider text-muted mb-1">Configurações</p>
+          <h1 className="font-display text-2xl font-semibold text-ink">Modelos</h1>
+          <p className="text-sm text-muted mt-1">{modelos.length} modelos cadastrados</p>
+        </div>
+        <div className="shrink-0">
+          <input ref={inputArquivoRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={aoEscolherArquivo} />
+          <button className="btn flex items-center gap-1.5" onClick={() => inputArquivoRef.current?.click()} disabled={importando}>
+            <Upload size={14} /> {importando ? "Importando…" : "Importar planilha"}
+          </button>
+        </div>
       </div>
+
+      {resumoImportacao && (
+        <div className="card p-4 mb-6 text-sm bg-teal-soft/40 border-teal/30">
+          <p className="font-medium text-teal mb-1">Importação concluída</p>
+          <p className="text-muted">
+            {resumoImportacao.total} linha(s) na planilha · <span className="text-ink font-medium">{resumoImportacao.inseridos} novo(s) modelo(s) criado(s)</span>
+            {resumoImportacao.duplicados > 0 && ` · ${resumoImportacao.duplicados} já existiam (ignorados)`}
+            {resumoImportacao.semCategoria > 0 && ` · ${resumoImportacao.semCategoria} sem categoria válida (ignorados)`}
+            {resumoImportacao.categoriasCriadas > 0 && ` · ${resumoImportacao.categoriasCriadas} categoria(s) nova(s) criada(s)`}
+          </p>
+        </div>
+      )}
+
+      <p className="text-xs text-muted mb-6 -mt-2">
+        A planilha precisa ter as colunas <span className="font-mono-num text-ink">Modelo</span> e{" "}
+        <span className="font-mono-num text-ink">Categoria</span>. Modelos repetidos são ignorados automaticamente.
+      </p>
 
       <form onSubmit={salvarModelo} className="card p-4 flex gap-3 mb-6 items-end">
         <div className="w-48">
@@ -99,7 +249,7 @@ function Conteudo() {
         <button className="btn-primary" type="submit">Adicionar</button>
       </form>
 
-      <div className="card divide-y divide-line">
+      <div className="card divide-y divide-line max-h-[520px] overflow-y-auto">
         {modelos.map((m) => (
           <div key={m.id} className="p-3 flex items-center justify-between gap-3 text-sm">
             {editando === m.id ? (
@@ -110,16 +260,18 @@ function Conteudo() {
             <div className="flex items-center gap-2 shrink-0">
               <span className="text-xs text-muted bg-canvas px-2 py-0.5 rounded">{m.categorias?.nome}</span>
               {editando !== m.id && (
-                <button className="btn" onClick={() => { setEditando(m.id); setNomeEdicao(m.nome); }}>Editar</button>
+                <button className="text-muted hover:text-gold transition" title="Alterar" onClick={() => { setEditando(m.id); setNomeEdicao(m.nome); }}>
+                  <Pencil size={14} />
+                </button>
               )}
               {editando === m.id && (
                 <>
-                  <button className="btn-primary" onClick={() => salvarEdicao(m.id)}>Salvar</button>
-                  <button className="btn" onClick={() => setEditando(null)}>Cancelar</button>
+                  <button className="btn-primary text-xs px-2 py-1.5" onClick={() => salvarEdicao(m.id)}>Salvar</button>
+                  <button className="btn text-xs px-2 py-1.5" onClick={() => setEditando(null)}>Cancelar</button>
                 </>
               )}
               {podeExcluirItem && editando !== m.id && (
-                <button className="btn text-danger" title="Excluir" onClick={() => excluir(m)}>
+                <button className="text-muted hover:text-danger transition" title="Excluir" onClick={() => excluir(m)}>
                   <Trash2 size={14} />
                 </button>
               )}

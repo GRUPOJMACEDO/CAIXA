@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { Pencil } from "lucide-react";
 import AppShell from "../../../components/AppShell";
 import { supabase } from "../../../lib/supabaseClient";
 import { useSessao } from "../../../lib/SessaoContext";
@@ -79,15 +80,17 @@ function Conteudo() {
             {permitido ? (
               <div className="flex items-center gap-2">
                 <input
-                  className="field-input w-24 text-xs font-mono-num"
+                  className="field-input w-24"
                   maxLength={7}
                   value={edicoes[u.id]?.codigo ?? u.codigo}
                   onChange={(e) => setEdicoes({ ...edicoes, [u.id]: { ...edicoes[u.id], codigo: e.target.value.toUpperCase() } })}
                 />
-                <button className="btn-primary" onClick={() => salvarAlteracao(u)}>Alterar</button>
+                <button className="text-muted hover:text-gold transition" title="Alterar" onClick={() => salvarAlteracao(u)}>
+                  <Pencil size={16} />
+                </button>
               </div>
             ) : (
-              <span className="font-mono-num text-muted text-xs">{u.codigo}</span>
+              <span className="text-muted text-xs">{u.codigo}</span>
             )}
           </div>
         ))}

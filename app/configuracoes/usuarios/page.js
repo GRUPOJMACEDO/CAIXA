@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import AppShell from "../../../components/AppShell";
 import Modal from "../../../components/Modal";
-import { Check, Copy, CopyCheck, FileSpreadsheet } from "lucide-react";
+import { Check, Copy, CopyCheck, FileSpreadsheet, Pencil } from "lucide-react";
 import { supabase } from "../../../lib/supabaseClient";
 import { useSessao } from "../../../lib/SessaoContext";
 import { gerarLogin } from "../../../lib/textoUtil";
@@ -277,7 +277,9 @@ function Conteudo() {
             <div className="flex items-center gap-3">
               <span className="text-xs text-gold font-medium">{rotuloCargo(u.cargo)}</span>
               {podeEditarUsuario && (
-                <button className="btn text-xs" onClick={() => abrirEdicao(u)}>Editar</button>
+                <button className="text-muted hover:text-gold transition p-1.5" title="Editar" onClick={() => abrirEdicao(u)}>
+                  <Pencil size={15} />
+                </button>
               )}
               <button className="btn text-xs" onClick={() => resetarSenha(u.id)}>Resetar senha</button>
               <button className={`btn text-xs ${u.ativo ? "text-danger" : "text-teal"}`} onClick={() => alternarBloqueio(u)}>

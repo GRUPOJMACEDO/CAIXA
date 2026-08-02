@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { Trash2 } from "lucide-react";
+import { Trash2, Pencil } from "lucide-react";
 import AppShell from "../../../components/AppShell";
 import { supabase } from "../../../lib/supabaseClient";
 import { useSessao } from "../../../lib/SessaoContext";
@@ -119,8 +119,8 @@ function Conteudo() {
             <div className="flex items-center gap-2 shrink-0">
               <span className="text-xs text-muted bg-canvas px-2 py-0.5 rounded">{t.categorias?.nome}</span>
               {podeEditar && editando !== t.id && (
-                <button className="btn" onClick={() => { setEditando(t.id); setNomeEdicao(t.nome); }}>
-                  Editar
+                <button className="text-muted hover:text-gold transition p-1.5" title="Editar" onClick={() => { setEditando(t.id); setNomeEdicao(t.nome); }}>
+                  <Pencil size={15} />
                 </button>
               )}
               {podeEditar && editando === t.id && (
@@ -130,8 +130,8 @@ function Conteudo() {
                 </>
               )}
               {podeExcluirItem && editando !== t.id && (
-                <button className="btn text-danger" title="Excluir" onClick={() => excluir(t)}>
-                  <Trash2 size={14} />
+                <button className="text-muted hover:text-danger transition p-1.5" title="Excluir" onClick={() => excluir(t)}>
+                  <Trash2 size={15} />
                 </button>
               )}
             </div>

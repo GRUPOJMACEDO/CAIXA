@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { Trash2 } from "lucide-react";
+import { Trash2, Pencil } from "lucide-react";
 import AppShell from "../../../components/AppShell";
 import { supabase } from "../../../lib/supabaseClient";
 import { useSessao } from "../../../lib/SessaoContext";
@@ -113,7 +113,9 @@ function Conteudo() {
                   </>
                 ) : (
                   <>
-                    <button className="btn text-xs px-2 py-1.5" onClick={() => { setEditando(c.id); setNomeEdicao(c.nome); }}>Editar</button>
+                    <button className="text-muted hover:text-gold transition p-1.5" title="Editar" onClick={() => { setEditando(c.id); setNomeEdicao(c.nome); }}>
+                      <Pencil size={15} />
+                    </button>
                     <button className="btn text-danger px-2 py-1.5" title="Excluir" onClick={() => excluir(c)}>
                       <Trash2 size={14} />
                     </button>

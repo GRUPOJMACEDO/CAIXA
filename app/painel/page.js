@@ -166,22 +166,32 @@ export default function PainelTV() {
           {ehMeta ? "Nenhuma unidade com meta definida para este mês." : "Sem dados neste período."}
         </div>
       ) : ehMeta ? (
-        <div className="rounded-xl2 border border-line bg-white overflow-y-auto flex-1 min-h-0 flex flex-col">
-          {resto.map((item, i) => {
-            const cor = CORES_UNIDADE[(i + 3) % CORES_UNIDADE.length];
-            const pct = Math.min(100, item.percentual);
+        <div className="grid grid-cols-2 gap-[1.2vh] flex-1 min-h-0">
+          {[0, 1].map((coluna) => {
+            const metade = Math.ceil(resto.length / 2);
+            const itensColuna = resto.slice(coluna * metade, coluna * metade + metade);
+            const offset = coluna * metade;
+            if (itensColuna.length === 0) return <div key={coluna} />;
             return (
-              <div key={item.unidade_id} className="flex-1 flex items-center gap-[1.5vh] px-[2vh] border-t border-line first:border-t-0">
-                <span className="text-muted font-mono-num text-[1.7vh] w-[3vh] shrink-0">{i + 4}º</span>
-                <span className="text-[1.9vh] w-[22vh] shrink-0 truncate">{item.unidade_nome}</span>
-                <div className="flex-1 flex items-center gap-[1vh]">
-                  <div className="flex-1 h-[1.4vh] bg-canvas rounded-full overflow-hidden border border-line">
-                    <div className="h-full rounded-full transition-[width]" style={{ width: `${pct}%`, background: cor }} />
-                  </div>
-                  <BandeiraQuadriculada size={16} />
-                </div>
-                <span className="font-mono-num text-[1.7vh] text-muted w-[9vh] text-right shrink-0">R$ {moedaCompacta(item.meta_mes)}</span>
-                <span className="font-mono-num font-semibold text-[1.9vh] w-[6vh] text-right shrink-0">{item.percentual.toFixed(0)}%</span>
+              <div key={coluna} className="rounded-xl2 border border-line bg-white overflow-y-auto flex flex-col h-full">
+                {itensColuna.map((item, i) => {
+                  const cor = CORES_UNIDADE[(offset + i + 3) % CORES_UNIDADE.length];
+                  const pct = Math.min(100, item.percentual);
+                  return (
+                    <div key={item.unidade_id} className="flex-1 flex items-center gap-[1vh] px-[1.6vh] border-t border-line first:border-t-0">
+                      <span className="text-muted font-mono-num text-[1.6vh] w-[2.6vh] shrink-0">{offset + i + 4}º</span>
+                      <span className="text-[1.7vh] w-[15vh] shrink-0 truncate">{item.unidade_nome}</span>
+                      <div className="flex-1 flex items-center gap-[0.8vh]">
+                        <div className="flex-1 h-[1.2vh] bg-canvas rounded-full overflow-hidden border border-line">
+                          <div className="h-full rounded-full transition-[width]" style={{ width: `${pct}%`, background: cor }} />
+                        </div>
+                        <BandeiraQuadriculada size={13} />
+                      </div>
+                      <span className="font-mono-num text-[1.4vh] text-muted w-[6.5vh] text-right shrink-0">R$ {moedaCompacta(item.meta_mes)}</span>
+                      <span className="font-mono-num font-semibold text-[1.6vh] w-[5vh] text-right shrink-0">{item.percentual.toFixed(0)}%</span>
+                    </div>
+                  );
+                })}
               </div>
             );
           })}
