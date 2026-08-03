@@ -1,36 +1,35 @@
 "use client";
 import { useEffect, useState } from "react";
 import { Wallet, CheckCircle2, Clock, Percent, Hash, Lock } from "lucide-react";
-import AppShell from "../../components/AppShell";
-import Modal from "../../components/Modal";
-import { supabase } from "../../lib/supabaseClient";
-import { useSessao } from "../../lib/SessaoContext";
-import { formatarMoedaSemSimbolo, formatarDataBR, mesReferenciaLabel } from "../../lib/formato";
+import AppShell from "../../../components/AppShell";
+import Modal from "../../../components/Modal";
+import { supabase } from "../../../lib/supabaseClient";
+import { useSessao } from "../../../lib/SessaoContext";
+import { formatarMoedaSemSimbolo, formatarDataBR } from "../../../lib/formato";
 
-function inicioMes() {
+function inicioDaSemana() {
   const d = new Date();
-  return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10);
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() - d.getDay()); // domingo
+  return d.toISOString().slice(0, 10);
 }
 
 const MEDALHA = ["text-gold", "text-prata", "text-bronze"];
 
 function ConteudoDashboard() {
-  const { unidades } = useSessao(); // unidades que EU tenho acesso (para liberar o drill-down)
+  const { unidades } = useSessao();
   const [linhas, setLinhas] = useState([]);
   const [lancamentosDetalhe, setLancamentosDetalhe] = useState([]);
   const [carregando, setCarregando] = useState(true);
-  const [detalhe, setDetalhe] = useState(null); // { titulo, unidadeId }
+  const [detalhe, setDetalhe] = useState(null);
   const [carregandoDetalhe, setCarregandoDetalhe] = useState(false);
 
   const idsAutorizados = new Set(unidades.map((u) => u.id));
 
   useEffect(() => {
     (async () => {
-      const { data } = await supabase.from("vw_dashboard_valores").select("*");
-      const lista = (data || []).map((u) => ({
-        ...u,
-        falta: Number(u.orcamento_aprovado) - Number(u.valor_pago),
-      }));
+      const { data } = await supabase.from("vw_dashboard_valores_semanal").select("*");
+      const lista = (data || []).map((u) => ({ ...u, falta: Number(u.orcamento_aprovado) - Number(u.valor_pago) }));
       setLinhas(lista);
       setCarregando(false);
     })();
@@ -44,13 +43,13 @@ function ConteudoDashboard() {
 
   async function abrirDetalhe(unidade) {
     setDetalhe({ titulo: unidade.unidade_nome, unidadeId: unidade.unidade_id });
-    if (!idsAutorizados.has(unidade.unidade_id)) return; // sem acesso — a tela mostra o aviso
+    if (!idsAutorizados.has(unidade.unidade_id)) return;
     setCarregandoDetalhe(true);
     const { data } = await supabase
       .from("lancamentos")
       .select("id, data, numero_os, orcamento_aprovado, valor_pago, tipos_servico(nome)")
       .eq("unidade_id", unidade.unidade_id)
-      .gte("data", inicioMes())
+      .gte("data", inicioDaSemana())
       .order("data", { ascending: false });
     setLancamentosDetalhe(data || []);
     setCarregandoDetalhe(false);
@@ -60,8 +59,8 @@ function ConteudoDashboard() {
     <div className="max-w-5xl">
       <div className="mb-6">
         <p className="text-xs uppercase tracking-wider text-muted mb-1">Dashboard</p>
-        <h1 className="font-display text-2xl font-semibold text-ink">Valores (Mensal) — {mesReferenciaLabel(inicioMes())}</h1>
-        <p className="text-sm text-muted mt-1">Ranking de todas as unidades do grupo.</p>
+        <h1 className="font-display text-2xl font-semibold text-ink">Valores (Semanal) — desde {formatarDataBR(inicioDaSemana())}</h1>
+        <p className="text-sm text-muted mt-1">Ranking de todas as unidades do grupo, semana de domingo a sábado.</p>
       </div>
 
       <div className="grid grid-cols-5 gap-3 mb-6">
@@ -121,11 +120,7 @@ function ConteudoDashboard() {
           <tbody>
             {carregando && <tr><td className="p-4 text-muted" colSpan={5}>Carregando…</td></tr>}
             {ordenadas.map((l, i) => (
-              <tr
-                key={l.unidade_id}
-                className="border-t border-line hover:bg-canvas/60 cursor-pointer"
-                onClick={() => abrirDetalhe(l)}
-              >
+              <tr key={l.unidade_id} className="border-t border-line hover:bg-canvas/60 cursor-pointer" onClick={() => abrirDetalhe(l)}>
                 <td className="p-3">
                   <span className="inline-flex items-center gap-2">
                     <span className={`text-xs font-semibold w-6 ${MEDALHA[i] || "text-muted"}`}>{i + 1}º</span>
@@ -144,7 +139,7 @@ function ConteudoDashboard() {
       </div>
 
       {detalhe && (
-        <Modal titulo={detalhe.titulo} subtitulo={`${lancamentosDetalhe.length} lançamento(s) no mês`} onFechar={() => setDetalhe(null)} largura="max-w-3xl">
+        <Modal titulo={detalhe.titulo} subtitulo={`${lancamentosDetalhe.length} lançamento(s) na semana`} onFechar={() => setDetalhe(null)} largura="max-w-3xl">
           {!idsAutorizados.has(detalhe.unidadeId) ? (
             <div className="flex flex-col items-center text-center py-6 text-muted">
               <Lock size={22} className="mb-2 opacity-60" />
@@ -185,7 +180,7 @@ function ConteudoDashboard() {
   );
 }
 
-export default function DashboardPage() {
+export default function DashboardValoresSemanalPage() {
   return (
     <AppShell>
       <ConteudoDashboard />
