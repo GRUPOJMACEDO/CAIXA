@@ -235,7 +235,7 @@ function Conteudo() {
                   ? "Este cargo tem acesso a apenas 1 unidade — escolha uma."
                   : "Marque uma ou mais lojas — para gerentes que cuidam de várias unidades."}
               </p>
-              <div className="grid grid-cols-4 gap-2">
+              <div className="grid grid-cols-3 gap-2">
                 {unidades.map((u) => {
                   const marcado = unidadeIds.includes(u.id);
                   return (
@@ -253,7 +253,7 @@ function Conteudo() {
                       >
                         {marcado && <Check size={12} strokeWidth={3} className="text-white" />}
                       </span>
-                      <span className="truncate">{u.nome}</span>
+                      <span>{u.nome}</span>
                     </label>
                   );
                 })}
@@ -327,7 +327,7 @@ function Conteudo() {
       )}
 
       {usuarioEditando && (
-        <Modal titulo={`Editar ${usuarioEditando.nome_completo}`} subtitulo="Alterar nome, login, cargo ou unidades" onFechar={() => setUsuarioEditando(null)}>
+        <Modal titulo={`Editar ${usuarioEditando.nome_completo}`} subtitulo="Alterar nome, login, cargo ou unidades" onFechar={() => setUsuarioEditando(null)} largura="max-w-3xl">
           <form onSubmit={salvarEdicaoUsuario} className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -362,7 +362,7 @@ function Conteudo() {
                   {rotuloCargo(edCargo)} tem acesso automático a todas as unidades.
                 </p>
               ) : (
-                <div className="grid grid-cols-4 gap-2 max-h-52 overflow-y-auto">
+                <div className="grid grid-cols-3 gap-2 max-h-52 overflow-y-auto">
                   {unidades.map((u) => {
                     const marcado = edUnidadeIds.includes(u.id);
                     return (
@@ -376,7 +376,7 @@ function Conteudo() {
                         <span className={`w-4 h-4 rounded flex items-center justify-center shrink-0 border ${marcado ? "bg-gold border-gold" : "border-line bg-white"}`}>
                           {marcado && <Check size={12} strokeWidth={3} className="text-white" />}
                         </span>
-                        <span className="truncate">{u.nome}</span>
+                        <span>{u.nome}</span>
                       </label>
                     );
                   })}
