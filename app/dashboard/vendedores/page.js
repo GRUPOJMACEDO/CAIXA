@@ -155,13 +155,13 @@ function ConteudoVendedores() {
               <td className="p-3">Atendente</td>
               <td className="p-3">Unidade</td>
               <td className="p-3 text-right">Valor vendido</td>
-              <td className="p-3 text-right">Prêmio (5%)</td>
+              {abaAtual.categoria && <td className="p-3 text-right">Prêmio (5%)</td>}
               <td className="p-3 text-right">Qtd. OS</td>
             </tr>
           </thead>
           <tbody>
-            {carregando && <tr><td className="p-4 text-muted" colSpan={5}>Carregando…</td></tr>}
-            {!carregando && linhas.length === 0 && <tr><td className="p-4 text-muted" colSpan={5}>Nenhuma venda no período.</td></tr>}
+            {carregando && <tr><td className="p-4 text-muted" colSpan={abaAtual.categoria ? 5 : 4}>Carregando…</td></tr>}
+            {!carregando && linhas.length === 0 && <tr><td className="p-4 text-muted" colSpan={abaAtual.categoria ? 5 : 4}>Nenhuma venda no período.</td></tr>}
             {linhas.map((l, i) => (
               <tr key={`${l.usuario_id}-${l.unidade_id}`} className="border-t border-line hover:bg-canvas/60 cursor-pointer" onClick={() => abrirDetalhe(l)}>
                 <td className="p-3">
@@ -173,7 +173,7 @@ function ConteudoVendedores() {
                 </td>
                 <td className="p-3 text-muted">{l.unidade_nome}</td>
                 <td className="p-3 text-right font-mono-num font-medium">R$ {formatarMoedaSemSimbolo(l.valor_pago)}</td>
-                <td className="p-3 text-right font-mono-num text-gold">R$ {formatarMoedaSemSimbolo(l.premio)}</td>
+                {abaAtual.categoria && <td className="p-3 text-right font-mono-num text-gold">R$ {formatarMoedaSemSimbolo(l.premio)}</td>}
                 <td className="p-3 text-right font-mono-num text-muted">{l.qtd_os}</td>
               </tr>
             ))}
