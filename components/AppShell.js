@@ -57,6 +57,7 @@ export const NAV_DASHBOARD = [
   { href: "/dashboard/valores-diario", label: "Valores (Diário)", icon: LayoutDashboard, descricao: "Resultado de hoje, por unidade, com ranking." },
   { href: "/dashboard/valores-semanal", label: "Valores (Semanal)", icon: LayoutDashboard, descricao: "Resultado da semana (domingo a sábado), por unidade." },
   { href: "/dashboard", label: "Valores (Mensal)", icon: LayoutDashboard, descricao: "Resultado do mês, por unidade, com ranking." },
+  { href: "/dashboard/metas", label: "Metas", icon: Target, descricao: "Progresso da meta mensal de cada unidade." },
   { href: "/dashboard/ow", label: "Orçamentos (OW)", icon: Receipt, descricao: "Todas as vendas do mês, por unidade — exceto acessórios." },
   { href: "/dashboard/vendedores", label: "Vendedores", icon: UserCheck, descricao: "Ranking de vendas de acessórios por atendente." },
   { href: "/dashboard/acessorios", label: "Acessórios", icon: Cable, descricao: "Vendas de acessórios por tipo de item." },
