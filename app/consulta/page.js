@@ -1,12 +1,12 @@
 "use client";
 import { useEffect, useState } from "react";
-import { Search, X, FileDown, Pencil, SearchX } from "lucide-react";
+import { Search, X, FileDown, Pencil, SearchX, Trash2, AlertTriangle } from "lucide-react";
 import AppShell from "../../components/AppShell";
 import Modal from "../../components/Modal";
 import CurrencyInput from "../../components/CurrencyInput";
 import { supabase } from "../../lib/supabaseClient";
 import { useSessao } from "../../lib/SessaoContext";
-import { podeAlterar } from "../../lib/permissions";
+import { podeAlterar, podeExcluirLancamento } from "../../lib/permissions";
 import { iconeCategoria } from "../../lib/iconesCategoria";
 import { formatarDataBR, formatarMoedaSemSimbolo } from "../../lib/formato";
 
@@ -41,8 +41,12 @@ function Conteudo() {
   const [editando, setEditando] = useState(false);
   const [edicao, setEdicao] = useState({});
   const [salvando, setSalvando] = useState(false);
+  const [excluindo, setExcluindo] = useState(false);
+  const [motivoExclusao, setMotivoExclusao] = useState("");
+  const [processandoExclusao, setProcessandoExclusao] = useState(false);
   const mostrarUnidade = unidades.length > 1;
   const podeEditar = podeAlterar(usuario.cargo);
+  const podeExcluir = podeExcluirLancamento(usuario.cargo);
 
   useEffect(() => {
     supabase.from("categorias").select("*").order("nome").then(({ data }) => setCategorias(data || []));
@@ -91,6 +95,8 @@ function Conteudo() {
   function abrirDetalhe(item) {
     setSelecionado(item);
     setEditando(false);
+    setExcluindo(false);
+    setMotivoExclusao("");
     setEdicao({
       orcamento_aprovado: Number(item.orcamento_aprovado),
       valor_pago: Number(item.valor_pago),
@@ -98,6 +104,33 @@ function Conteudo() {
       parcelas: item.parcelas || "",
       bandeira: item.bandeira || "",
     });
+  }
+
+  async function confirmarExclusao() {
+    if (!motivoExclusao.trim()) return;
+    setProcessandoExclusao(true);
+    // primeiro grava o motivo (fica no log de auditoria), depois exclui de fato
+    const { error: erroMotivo } = await supabase
+      .from("lancamentos")
+      .update({ motivo_exclusao: motivoExclusao.trim(), alterado_por: usuario.id, alterado_em: new Date().toISOString() })
+      .eq("id", selecionado.id);
+    if (erroMotivo) {
+      alert("Erro ao registrar o motivo: " + erroMotivo.message);
+      setProcessandoExclusao(false);
+      return;
+    }
+    const { data, error } = await supabase.from("lancamentos").delete().eq("id", selecionado.id).select();
+    setProcessandoExclusao(false);
+    if (error) {
+      alert("Erro ao excluir: " + error.message);
+      return;
+    }
+    if (!data || data.length === 0) {
+      alert("Não foi possível excluir — você não tem permissão para esta ação.");
+      return;
+    }
+    setResultados((atual) => atual.filter((r) => r.id !== selecionado.id));
+    setSelecionado(null);
   }
 
   async function salvarEdicao() {
@@ -226,15 +259,26 @@ function Conteudo() {
                         <td className="p-3 text-right font-mono-num">R$ {formatarMoedaSemSimbolo(r.orcamento_aprovado)}</td>
                         <td className="p-3 text-right font-mono-num font-medium">R$ {formatarMoedaSemSimbolo(r.valor_pago)}</td>
                         <td className="p-3 text-right">
-                          {podeEditar && (
-                            <button
-                              className="text-muted hover:text-gold transition"
-                              title="Alterar"
-                              onClick={(e) => { e.stopPropagation(); abrirDetalhe(r); setEditando(true); }}
-                            >
-                              <Pencil size={14} />
-                            </button>
-                          )}
+                          <div className="flex items-center justify-end gap-2">
+                            {podeEditar && (
+                              <button
+                                className="text-muted hover:text-gold transition"
+                                title="Alterar"
+                                onClick={(e) => { e.stopPropagation(); abrirDetalhe(r); setEditando(true); }}
+                              >
+                                <Pencil size={14} />
+                              </button>
+                            )}
+                            {podeExcluir && (
+                              <button
+                                className="text-muted hover:text-danger transition"
+                                title="Excluir"
+                                onClick={(e) => { e.stopPropagation(); abrirDetalhe(r); setExcluindo(true); }}
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     );
@@ -252,7 +296,39 @@ function Conteudo() {
           subtitulo={mostrarUnidade ? selecionado.unidades?.nome : undefined}
           onFechar={() => setSelecionado(null)}
         >
-          {!editando ? (
+          {excluindo ? (
+            <div className="space-y-4">
+              <div className="flex items-start gap-2 text-sm text-danger">
+                <AlertTriangle size={18} className="shrink-0 mt-0.5" />
+                <p>
+                  Você está prestes a excluir permanentemente o lançamento de{" "}
+                  <span className="font-mono-num font-medium">R$ {formatarMoedaSemSimbolo(selecionado.valor_pago)}</span> da OS{" "}
+                  <span className="font-mono-num font-medium">{selecionado.numero_os}</span>. Essa ação não pode ser desfeita.
+                </p>
+              </div>
+              <div>
+                <label className="field-label">Motivo da exclusão (obrigatório)</label>
+                <textarea
+                  className="field-input"
+                  rows={3}
+                  value={motivoExclusao}
+                  onChange={(e) => setMotivoExclusao(e.target.value)}
+                  placeholder="Ex: lançamento de teste, duplicado por engano, etc."
+                />
+                <p className="text-xs text-muted mt-1">O motivo fica registrado no log do sistema, junto com os dados do lançamento excluído.</p>
+              </div>
+              <div className="flex justify-end gap-2">
+                <button className="btn" onClick={() => setExcluindo(false)}>Cancelar</button>
+                <button
+                  className="btn-primary bg-danger hover:bg-danger flex items-center gap-1.5 disabled:opacity-40"
+                  disabled={!motivoExclusao.trim() || processandoExclusao}
+                  onClick={confirmarExclusao}
+                >
+                  <Trash2 size={14} /> {processandoExclusao ? "Excluindo…" : "Confirmar exclusão"}
+                </button>
+              </div>
+            </div>
+          ) : !editando ? (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div><p className="text-xs text-muted">Data</p><p className="font-medium">{formatarDataBR(selecionado.data)}</p></div>
@@ -264,13 +340,18 @@ function Conteudo() {
                 <div><p className="text-xs text-muted">Forma de pagamento</p><p className="font-medium">{selecionado.forma_pagamento}</p></div>
                 <div><p className="text-xs text-muted">Bandeira / Parcelas</p><p className="font-medium">{selecionado.bandeira || "—"} {selecionado.parcelas ? `· ${selecionado.parcelas}x` : ""}</p></div>
               </div>
-              {podeEditar && (
-                <div className="flex justify-end">
+              <div className="flex justify-end gap-2">
+                {podeExcluir && (
+                  <button className="btn flex items-center gap-1.5 text-danger border-danger/30 hover:bg-danger-soft" onClick={() => setExcluindo(true)}>
+                    <Trash2 size={14} /> Excluir
+                  </button>
+                )}
+                {podeEditar && (
                   <button className="btn flex items-center gap-1.5" onClick={() => setEditando(true)}>
                     <Pencil size={14} /> Alterar
                   </button>
-                </div>
-              )}
+                )}
+              </div>
             </div>
           ) : (
             <div className="space-y-4">
