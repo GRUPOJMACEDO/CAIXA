@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { Wallet, CheckCircle2, Clock, Percent, Hash, Lock } from "lucide-react";
 import AppShell from "../../../components/AppShell";
 import Modal from "../../../components/Modal";
+import BotaoAtualizar from "../../../components/BotaoAtualizar";
 import { supabase } from "../../../lib/supabaseClient";
 import { useSessao } from "../../../lib/SessaoContext";
 import { formatarMoedaSemSimbolo, formatarDataBR } from "../../../lib/formato";
@@ -23,13 +24,15 @@ function ConteudoDashboard() {
 
   const idsAutorizados = new Set(unidades.map((u) => u.id));
 
+  async function carregar() {
+    const { data } = await supabase.from("vw_dashboard_valores_diario").select("*");
+    const lista = (data || []).map((u) => ({ ...u, falta: Number(u.orcamento_aprovado) - Number(u.valor_pago) }));
+    setLinhas(lista);
+    setCarregando(false);
+  }
+
   useEffect(() => {
-    (async () => {
-      const { data } = await supabase.from("vw_dashboard_valores_diario").select("*");
-      const lista = (data || []).map((u) => ({ ...u, falta: Number(u.orcamento_aprovado) - Number(u.valor_pago) }));
-      setLinhas(lista);
-      setCarregando(false);
-    })();
+    carregar();
   }, []);
 
   const totalPago = linhas.reduce((s, l) => s + Number(l.valor_pago), 0);
@@ -54,10 +57,13 @@ function ConteudoDashboard() {
 
   return (
     <div className="max-w-5xl">
-      <div className="mb-6">
-        <p className="text-xs uppercase tracking-wider text-muted mb-1">Dashboard</p>
-        <h1 className="font-display text-2xl font-semibold text-ink">Valores (Diário) — {formatarDataBR(hoje())}</h1>
-        <p className="text-sm text-muted mt-1">Ranking de todas as unidades do grupo, só de hoje.</p>
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <p className="text-xs uppercase tracking-wider text-muted mb-1">Dashboard</p>
+          <h1 className="font-display text-2xl font-semibold text-ink">Valores (Diário) — {formatarDataBR(hoje())}</h1>
+          <p className="text-sm text-muted mt-1">Ranking de todas as unidades do grupo, só de hoje.</p>
+        </div>
+        <BotaoAtualizar aoAtualizar={carregar} className="shrink-0" />
       </div>
 
       <div className="grid grid-cols-5 gap-3 mb-6">

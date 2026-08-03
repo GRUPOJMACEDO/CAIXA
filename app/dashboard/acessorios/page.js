@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { Cable, Percent, Hash, Store } from "lucide-react";
 import AppShell from "../../../components/AppShell";
+import BotaoAtualizar from "../../../components/BotaoAtualizar";
 import { supabase } from "../../../lib/supabaseClient";
 import { useSessao } from "../../../lib/SessaoContext";
 import { formatarMoedaSemSimbolo, mesReferenciaLabel } from "../../../lib/formato";
@@ -17,37 +18,39 @@ function ConteudoAcessorios() {
   const [linhas, setLinhas] = useState([]);
   const [carregando, setCarregando] = useState(true);
 
-  useEffect(() => {
+  async function carregar() {
     if (unidades.length === 0) return;
-    (async () => {
-      setCarregando(true);
-      const { data: categoriaAcessorio } = await supabase.from("categorias").select("id").eq("nome", "Acessório").single();
-      if (!categoriaAcessorio) {
-        setCarregando(false);
-        return;
-      }
-
-      let query = supabase
-        .from("lancamentos")
-        .select("valor_pago, tipos_servico(nome)")
-        .eq("categoria_id", categoriaAcessorio.id)
-        .gte("data", inicioMes());
-
-      query = unidadeId ? query.eq("unidade_id", unidadeId) : query.in("unidade_id", unidades.map((u) => u.id));
-
-      const { data: lancs } = await query;
-
-      const mapa = {};
-      (lancs || []).forEach((l) => {
-        const nome = l.tipos_servico?.nome || "Outros";
-        if (!mapa[nome]) mapa[nome] = { nome, valor: 0, qtd: 0 };
-        mapa[nome].valor += Number(l.valor_pago);
-        mapa[nome].qtd += 1;
-      });
-
-      setLinhas(Object.values(mapa).sort((a, b) => b.valor - a.valor));
+    setCarregando(true);
+    const { data: categoriaAcessorio } = await supabase.from("categorias").select("id").eq("nome", "Acessório").single();
+    if (!categoriaAcessorio) {
       setCarregando(false);
-    })();
+      return;
+    }
+
+    let query = supabase
+      .from("lancamentos")
+      .select("valor_pago, tipos_servico(nome)")
+      .eq("categoria_id", categoriaAcessorio.id)
+      .gte("data", inicioMes());
+
+    query = unidadeId ? query.eq("unidade_id", unidadeId) : query.in("unidade_id", unidades.map((u) => u.id));
+
+    const { data: lancs } = await query;
+
+    const mapa = {};
+    (lancs || []).forEach((l) => {
+      const nome = l.tipos_servico?.nome || "Outros";
+      if (!mapa[nome]) mapa[nome] = { nome, valor: 0, qtd: 0 };
+      mapa[nome].valor += Number(l.valor_pago);
+      mapa[nome].qtd += 1;
+    });
+
+    setLinhas(Object.values(mapa).sort((a, b) => b.valor - a.valor));
+    setCarregando(false);
+  }
+
+  useEffect(() => {
+    carregar();
   }, [unidades, unidadeId]);
 
   const totalValor = linhas.reduce((s, l) => s + l.valor, 0);
@@ -62,17 +65,20 @@ function ConteudoAcessorios() {
           <h1 className="font-display text-2xl font-semibold text-ink">Acessórios de {mesReferenciaLabel(inicioMes())}</h1>
           <p className="text-sm text-muted mt-1">Vendas de acessórios por tipo de item.</p>
         </div>
-        {unidades.length > 1 && (
-          <div className="w-64 shrink-0">
-            <label className="field-label flex items-center gap-1.5"><Store size={12} className="text-muted" /> Unidade</label>
-            <select className="field-input" value={unidadeId} onChange={(e) => setUnidadeId(e.target.value)}>
-              <option value="">Todas as unidades</option>
-              {unidades.map((u) => (
-                <option key={u.id} value={u.id}>{u.nome}</option>
-              ))}
-            </select>
-          </div>
-        )}
+        <div className="flex items-end gap-3 shrink-0">
+          {unidades.length > 1 && (
+            <div className="w-64 shrink-0">
+              <label className="field-label flex items-center gap-1.5"><Store size={12} className="text-muted" /> Unidade</label>
+              <select className="field-input" value={unidadeId} onChange={(e) => setUnidadeId(e.target.value)}>
+                <option value="">Todas as unidades</option>
+                {unidades.map((u) => (
+                  <option key={u.id} value={u.id}>{u.nome}</option>
+                ))}
+              </select>
+            </div>
+          )}
+          <BotaoAtualizar aoAtualizar={carregar} />
+        </div>
       </div>
 
       <div className="grid grid-cols-3 gap-3 mb-6">

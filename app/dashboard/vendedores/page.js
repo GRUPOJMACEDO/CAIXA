@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { Wallet, CheckCircle2, Clock, Percent, Hash, Lock } from "lucide-react";
 import AppShell from "../../../components/AppShell";
 import Modal from "../../../components/Modal";
+import BotaoAtualizar from "../../../components/BotaoAtualizar";
 import { supabase } from "../../../lib/supabaseClient";
 import { useSessao } from "../../../lib/SessaoContext";
 import { CARGOS } from "../../../lib/permissions";
@@ -33,19 +34,19 @@ function ConteudoVendedores() {
   const idsAutorizados = new Set(unidades.map((u) => u.id));
   const abaAtual = ABAS.find((a) => a.id === aba);
 
-  useEffect(() => {
+  async function carregar() {
     setCarregando(true);
-    supabase
-      .from(abaAtual.view)
-      .select("*")
-      .then(({ data }) => {
-        const lista = (data || [])
-          .map((v) => ({ ...v, falta: Number(v.orcamento_aprovado) - Number(v.valor_pago), premio: Number(v.valor_pago) * 0.05 }))
-          .filter((v) => Number(v.valor_pago) > 0 || Number(v.qtd_os) > 0)
-          .sort((a, b) => Number(b.valor_pago) - Number(a.valor_pago));
-        setLinhas(lista);
-        setCarregando(false);
-      });
+    const { data } = await supabase.from(abaAtual.view).select("*");
+    const lista = (data || [])
+      .map((v) => ({ ...v, falta: Number(v.orcamento_aprovado) - Number(v.valor_pago), premio: Number(v.valor_pago) * 0.05 }))
+      .filter((v) => Number(v.valor_pago) > 0 || Number(v.qtd_os) > 0)
+      .sort((a, b) => Number(b.valor_pago) - Number(a.valor_pago));
+    setLinhas(lista);
+    setCarregando(false);
+  }
+
+  useEffect(() => {
+    carregar();
   }, [aba]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const totalOrcamento = linhas.reduce((s, l) => s + Number(l.orcamento_aprovado), 0);
@@ -85,10 +86,13 @@ function ConteudoVendedores() {
 
   return (
     <div className="max-w-5xl">
-      <div className="mb-5">
-        <p className="text-xs uppercase tracking-wider text-muted mb-1">Dashboard</p>
-        <h1 className="font-display text-2xl font-semibold text-ink">Vendedores de {mesReferenciaLabel(inicioMes())}</h1>
-        <p className="text-sm text-muted mt-1">Ranking por atendente, de todas as unidades.</p>
+      <div className="mb-5 flex items-start justify-between gap-4">
+        <div>
+          <p className="text-xs uppercase tracking-wider text-muted mb-1">Dashboard</p>
+          <h1 className="font-display text-2xl font-semibold text-ink">Vendedores de {mesReferenciaLabel(inicioMes())}</h1>
+          <p className="text-sm text-muted mt-1">Ranking por atendente, de todas as unidades.</p>
+        </div>
+        <BotaoAtualizar aoAtualizar={carregar} className="shrink-0" />
       </div>
 
       <div className="flex gap-2 mb-5">

@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { Target } from "lucide-react";
 import AppShell from "../../../components/AppShell";
+import BotaoAtualizar from "../../../components/BotaoAtualizar";
 import { supabase } from "../../../lib/supabaseClient";
 
 const MEDALHAS = [
@@ -40,14 +41,15 @@ function ConteudoMetas() {
   const [unidadesRanking, setUnidadesRanking] = useState([]);
   const [carregando, setCarregando] = useState(true);
 
+  async function carregar() {
+    setCarregando(true);
+    const { data } = await supabase.from("vw_painel_tv").select("*");
+    setUnidadesRanking(data || []);
+    setCarregando(false);
+  }
+
   useEffect(() => {
-    supabase
-      .from("vw_painel_tv")
-      .select("*")
-      .then(({ data }) => {
-        setUnidadesRanking(data || []);
-        setCarregando(false);
-      });
+    carregar();
   }, []);
 
   const comMeta = unidadesRanking.map((u) => ({
@@ -73,12 +75,15 @@ function ConteudoMetas() {
 
   return (
     <div>
-      <div className="mb-6">
-        <p className="text-xs uppercase tracking-wider text-muted mb-1">Dashboard</p>
-        <h1 className="font-display text-2xl font-semibold text-ink flex items-center gap-2">
-          <Target size={22} className="text-gold" /> Metas
-        </h1>
-        <p className="text-sm text-muted mt-1">Progresso da meta do mês, por unidade.</p>
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <p className="text-xs uppercase tracking-wider text-muted mb-1">Dashboard</p>
+          <h1 className="font-display text-2xl font-semibold text-ink flex items-center gap-2">
+            <Target size={22} className="text-gold" /> Metas
+          </h1>
+          <p className="text-sm text-muted mt-1">Progresso da meta do mês, por unidade.</p>
+        </div>
+        <BotaoAtualizar aoAtualizar={carregar} className="shrink-0" />
       </div>
 
       {ordenadas.length === 0 ? (
