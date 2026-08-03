@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { Pencil, Trash2, Upload } from "lucide-react";
+import { Pencil, Trash2, Upload, Check, X, Inbox } from "lucide-react";
 import AppShell from "../../../components/AppShell";
 import { supabase } from "../../../lib/supabaseClient";
 import { useSessao } from "../../../lib/SessaoContext";
@@ -16,6 +16,7 @@ function Conteudo() {
   const [nomeEdicao, setNomeEdicao] = useState("");
   const [importando, setImportando] = useState(false);
   const [resumoImportacao, setResumoImportacao] = useState(null);
+  const [solicitacoes, setSolicitacoes] = useState([]);
   const inputArquivoRef = useRef(null);
 
   async function carregar() {
@@ -23,6 +24,34 @@ function Conteudo() {
     setCategorias(c || []);
     const { data: m } = await supabase.from("modelos").select("*, categorias(nome)").order("nome");
     setModelos(m || []);
+    const { data: s } = await supabase
+      .from("solicitacoes_modelo")
+      .select("*, categorias(nome), unidades(nome), usuarios!solicitado_por(nome_completo)")
+      .eq("status", "pendente")
+      .order("criado_em", { ascending: false });
+    setSolicitacoes(s || []);
+  }
+
+  async function aprovarSolicitacao(s) {
+    const { data: novoModelo, error } = await supabase.from("modelos").insert({ categoria_id: s.categoria_id, nome: s.nome }).select().single();
+    if (error) {
+      alert("Erro ao aprovar: " + error.message);
+      return;
+    }
+    await supabase
+      .from("solicitacoes_modelo")
+      .update({ status: "aprovado", resolvido_por: usuario.id, resolvido_em: new Date().toISOString() })
+      .eq("id", s.id);
+    carregar();
+  }
+
+  async function rejeitarSolicitacao(s) {
+    if (!window.confirm(`Rejeitar o pedido de "${s.nome}"?`)) return;
+    await supabase
+      .from("solicitacoes_modelo")
+      .update({ status: "rejeitado", resolvido_por: usuario.id, resolvido_em: new Date().toISOString() })
+      .eq("id", s.id);
+    carregar();
   }
 
   useEffect(() => {
@@ -224,6 +253,36 @@ function Conteudo() {
             {resumoImportacao.semCategoria > 0 && ` · ${resumoImportacao.semCategoria} sem categoria válida (ignorados)`}
             {resumoImportacao.categoriasCriadas > 0 && ` · ${resumoImportacao.categoriasCriadas} categoria(s) nova(s) criada(s)`}
           </p>
+        </div>
+      )}
+
+      {solicitacoes.length > 0 && (
+        <div className="card overflow-hidden mb-6 border-gold/40">
+          <div className="px-4 py-3 border-b border-line bg-gold-soft/40 flex items-center gap-2">
+            <Inbox size={15} className="text-gold-strong" />
+            <p className="font-display text-sm font-semibold text-ink">Solicitações de novo modelo</p>
+            <span className="text-xs text-muted">({solicitacoes.length} pendente(s))</span>
+          </div>
+          <div className="divide-y divide-line">
+            {solicitacoes.map((s) => (
+              <div key={s.id} className="p-3 flex items-center justify-between gap-3 text-sm">
+                <div>
+                  <p className="font-medium">{s.nome} <span className="text-xs text-muted bg-canvas px-2 py-0.5 rounded ml-1">{s.categorias?.nome}</span></p>
+                  <p className="text-xs text-muted mt-0.5">
+                    Pedido por {s.usuarios?.nome_completo || "—"}{s.unidades?.nome && ` · ${s.unidades.nome}`} · {new Date(s.criado_em).toLocaleDateString("pt-BR")}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button className="btn text-xs px-2 py-1.5 text-teal border-teal/30 hover:bg-teal-soft flex items-center gap-1" onClick={() => aprovarSolicitacao(s)}>
+                    <Check size={13} /> Aprovar
+                  </button>
+                  <button className="btn text-xs px-2 py-1.5 text-danger border-danger/30 hover:bg-danger-soft flex items-center gap-1" onClick={() => rejeitarSolicitacao(s)}>
+                    <X size={13} /> Rejeitar
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { Save, ReceiptText, Store, CalendarDays, Hash, Tags, Boxes, Wrench, Wallet, CircleDollarSign, CreditCard, Layers, Landmark } from "lucide-react";
 import AppShell from "../../components/AppShell";
 import CurrencyInput from "../../components/CurrencyInput";
+import ComboBoxModelo from "../../components/ComboBoxModelo";
 import { supabase } from "../../lib/supabaseClient";
 import { useSessao } from "../../lib/SessaoContext";
 import { podeLancarDataRetroativa } from "../../lib/permissions";
@@ -26,7 +27,6 @@ function Rotulo({ icone: Icone, children }) {
 function FormularioLancamento() {
   const { usuario, unidades } = useSessao();
   const [categorias, setCategorias] = useState([]);
-  const [modelos, setModelos] = useState([]);
   const [tiposServico, setTiposServico] = useState([]);
   const [carregandoTipos, setCarregandoTipos] = useState(false);
 
@@ -60,16 +60,14 @@ function FormularioLancamento() {
     supabase.from("categorias").select("*").order("nome").then(({ data }) => setCategorias(data || []));
   }, []);
 
-  // modelos e tipos de serviço dependem da categoria escolhida
+  // tipos de serviço dependem da categoria escolhida (modelo é buscado pelo ComboBoxModelo)
   useEffect(() => {
     setTipoServicoId("");
     setModeloId("");
     if (!categoriaId) {
-      setModelos([]);
       setTiposServico([]);
       return;
     }
-    supabase.from("modelos").select("*").eq("categoria_id", categoriaId).order("nome").then(({ data }) => setModelos(data || []));
     setCarregandoTipos(true);
     supabase
       .from("tipos_servico")
@@ -242,12 +240,13 @@ function FormularioLancamento() {
         </div>
         <div>
           <Rotulo icone={Boxes}>Modelo</Rotulo>
-          <select className="field-input" value={modeloId} onChange={(e) => setModeloId(e.target.value)} disabled={!categoriaId}>
-            <option value="">Selecione</option>
-            {modelos.map((m) => (
-              <option key={m.id} value={m.id}>{m.nome}</option>
-            ))}
-          </select>
+          <ComboBoxModelo
+            categoriaId={categoriaId}
+            unidadeId={unidadeId}
+            modeloId={modeloId}
+            onSelecionar={setModeloId}
+            disabled={!categoriaId}
+          />
         </div>
         <div>
           <Rotulo icone={Wrench}>Tipo de serviço</Rotulo>

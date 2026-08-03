@@ -1,0 +1,128 @@
+"use client";
+import { useEffect, useRef, useState } from "react";
+import { Search, PlusCircle, Check } from "lucide-react";
+import { supabase } from "../lib/supabaseClient";
+import { useSessao } from "../lib/SessaoContext";
+
+/**
+ * Campo de busca de Modelo com autocomplete. Se não encontrar nada
+ * parecido com o texto digitado, oferece um botão para solicitar a
+ * inclusão — cria um pedido pendente, que quem administra Modelos
+ * aprova depois em Configurações > Modelos.
+ */
+export default function ComboBoxModelo({ categoriaId, unidadeId, modeloId, onSelecionar, disabled }) {
+  const { usuario } = useSessao();
+  const [modelos, setModelos] = useState([]);
+  const [texto, setTexto] = useState("");
+  const [aberto, setAberto] = useState(false);
+  const [solicitado, setSolicitado] = useState(false);
+  const [enviando, setEnviando] = useState(false);
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    setTexto("");
+    setSolicitado(false);
+    if (!categoriaId) {
+      setModelos([]);
+      return;
+    }
+    supabase.from("modelos").select("*").eq("categoria_id", categoriaId).order("nome").then(({ data }) => setModelos(data || []));
+  }, [categoriaId]);
+
+  useEffect(() => {
+    if (modeloId) {
+      const m = modelos.find((x) => x.id === modeloId);
+      if (m) setTexto(m.nome);
+    }
+  }, [modeloId, modelos]);
+
+  useEffect(() => {
+    function aoClicarFora(e) {
+      if (containerRef.current && !containerRef.current.contains(e.target)) setAberto(false);
+    }
+    window.addEventListener("mousedown", aoClicarFora);
+    return () => window.removeEventListener("mousedown", aoClicarFora);
+  }, []);
+
+  const filtrados = texto.trim()
+    ? modelos.filter((m) => m.nome.toLowerCase().includes(texto.trim().toLowerCase()))
+    : modelos;
+
+  function escolher(m) {
+    setTexto(m.nome);
+    setAberto(false);
+    onSelecionar(m.id);
+  }
+
+  async function solicitarInclusao() {
+    if (!texto.trim() || !categoriaId) return;
+    setEnviando(true);
+    await supabase.from("solicitacoes_modelo").insert({
+      categoria_id: categoriaId,
+      nome: texto.trim().toUpperCase(),
+      unidade_id: unidadeId || null,
+      solicitado_por: usuario?.id || null,
+    });
+    setEnviando(false);
+    setSolicitado(true);
+    setAberto(false);
+  }
+
+  return (
+    <div className="relative" ref={containerRef}>
+      <div className="relative">
+        <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
+        <input
+          className="field-input pl-8"
+          value={texto}
+          disabled={disabled}
+          onChange={(e) => {
+            setTexto(e.target.value);
+            setAberto(true);
+            setSolicitado(false);
+            onSelecionar("");
+          }}
+          onFocus={() => setAberto(true)}
+          placeholder={categoriaId ? "Digite para buscar…" : "Escolha a categoria primeiro"}
+        />
+      </div>
+
+      {aberto && !disabled && (
+        <div className="absolute z-20 mt-1 w-full card max-h-56 overflow-y-auto shadow-lg">
+          {filtrados.length > 0 ? (
+            filtrados.map((m) => (
+              <button
+                key={m.id}
+                type="button"
+                onClick={() => escolher(m)}
+                className="w-full text-left px-3 py-2 text-sm hover:bg-canvas transition flex items-center justify-between"
+              >
+                {m.nome}
+                {m.id === modeloId && <Check size={13} className="text-gold" />}
+              </button>
+            ))
+          ) : (
+            <div className="p-3 text-sm text-muted">
+              <p className="mb-2">Nenhum modelo encontrado{texto.trim() ? ` para "${texto.trim()}"` : ""}.</p>
+              {texto.trim() && !solicitado && (
+                <button
+                  type="button"
+                  onClick={solicitarInclusao}
+                  disabled={enviando}
+                  className="btn text-xs flex items-center gap-1.5 text-gold border-gold/40 hover:bg-gold-soft/40"
+                >
+                  <PlusCircle size={13} /> {enviando ? "Enviando…" : `Solicitar cadastro de "${texto.trim()}"`}
+                </button>
+              )}
+              {solicitado && (
+                <p className="text-teal text-xs flex items-center gap-1.5">
+                  <Check size={13} /> Pedido enviado! Quem administra Modelos vai aprovar.
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
