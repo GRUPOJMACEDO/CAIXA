@@ -13,6 +13,7 @@ import { useSessao } from "../lib/SessaoContext";
 export default function ComboBoxModelo({ categoriaId, unidadeId, modeloId, onSelecionar, disabled }) {
   const { usuario } = useSessao();
   const [modelos, setModelos] = useState([]);
+  const [carregandoModelos, setCarregandoModelos] = useState(false);
   const [texto, setTexto] = useState("");
   const [aberto, setAberto] = useState(false);
   const [solicitado, setSolicitado] = useState(false);
@@ -26,7 +27,16 @@ export default function ComboBoxModelo({ categoriaId, unidadeId, modeloId, onSel
       setModelos([]);
       return;
     }
-    supabase.from("modelos").select("*").eq("categoria_id", categoriaId).order("nome").then(({ data }) => setModelos(data || []));
+    setCarregandoModelos(true);
+    supabase
+      .from("modelos")
+      .select("*")
+      .eq("categoria_id", categoriaId)
+      .order("nome")
+      .then(({ data }) => {
+        setModelos(data || []);
+        setCarregandoModelos(false);
+      });
   }, [categoriaId]);
 
   useEffect(() => {
@@ -57,13 +67,17 @@ export default function ComboBoxModelo({ categoriaId, unidadeId, modeloId, onSel
   async function solicitarInclusao() {
     if (!texto.trim() || !categoriaId) return;
     setEnviando(true);
-    await supabase.from("solicitacoes_modelo").insert({
+    const { error } = await supabase.from("solicitacoes_modelo").insert({
       categoria_id: categoriaId,
       nome: texto.trim().toUpperCase(),
       unidade_id: unidadeId || null,
       solicitado_por: usuario?.id || null,
     });
     setEnviando(false);
+    if (error) {
+      alert("Não foi possível enviar o pedido: " + error.message);
+      return;
+    }
     setSolicitado(true);
     setAberto(false);
   }
@@ -89,7 +103,9 @@ export default function ComboBoxModelo({ categoriaId, unidadeId, modeloId, onSel
 
       {aberto && !disabled && (
         <div className="absolute z-20 mt-1 w-full card max-h-56 overflow-y-auto shadow-lg">
-          {filtrados.length > 0 ? (
+          {carregandoModelos ? (
+            <p className="p-3 text-sm text-muted">Carregando…</p>
+          ) : filtrados.length > 0 ? (
             filtrados.map((m) => (
               <button
                 key={m.id}
