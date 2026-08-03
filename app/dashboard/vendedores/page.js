@@ -14,7 +14,7 @@ function inicioMes() {
 }
 
 const MEDALHA = ["text-gold", "text-prata", "text-bronze"];
-const CARGOS_GESTAO = [CARGOS.SUPERVISAO, CARGOS.GERENCIA, CARGOS.ADMINISTRADOR, CARGOS.DIRETOR];
+const CARGOS_GESTAO = [CARGOS.SUPERVISAO, CARGOS.GERENCIA, CARGOS.ADM, CARGOS.ADMINISTRADOR, CARGOS.DIRETOR];
 
 const ABAS = [
   { id: "orcamentos", rotulo: "Orçamentos", view: "vw_dashboard_vendedores_ow", categoria: null },
