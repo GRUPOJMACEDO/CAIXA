@@ -387,7 +387,7 @@ function FormularioLancamento() {
               </button>
             </div>
           ) : (
-            <div className="flex gap-2">
+            <div>
               <select
                 className="field-input"
                 value={formaPagamento}
@@ -403,10 +403,10 @@ function FormularioLancamento() {
               <button
                 type="button"
                 onClick={() => setMostrarModalFormas(true)}
-                title="Mais de uma forma de pagamento"
-                className="shrink-0 w-[42px] h-[38px] rounded-lg border border-line bg-white text-muted hover:border-gold hover:text-gold-strong hover:bg-gold-soft/30 transition flex items-center justify-center"
+                className="mt-1.5 w-full flex items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-white
+                  bg-gradient-to-b from-gold to-gold-strong shadow-sm hover:brightness-105 hover:-translate-y-px active:translate-y-0 transition-all"
               >
-                <Ticket size={16} />
+                <Ticket size={13} /> Dividir em mais de uma forma
               </button>
             </div>
           )}
