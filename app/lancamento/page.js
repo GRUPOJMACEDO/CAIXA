@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { Save, ReceiptText, Store, CalendarDays, Hash, Tags, Boxes, Wrench, Wallet, CircleDollarSign, CreditCard, Layers, Landmark } from "lucide-react";
+import { Save, ReceiptText, Store, CalendarDays, Hash, Tags, Boxes, Wrench, Wallet, CircleDollarSign, CreditCard, Layers, Landmark, StickyNote } from "lucide-react";
 import AppShell from "../../components/AppShell";
 import CurrencyInput from "../../components/CurrencyInput";
 import ComboBoxModelo from "../../components/ComboBoxModelo";
@@ -40,9 +40,10 @@ function FormularioLancamento() {
   const [tipoServicoId, setTipoServicoId] = useState("");
   const [orcamento, setOrcamento] = useState("");
   const [valorPago, setValorPago] = useState("");
-  const [formaPagamento, setFormaPagamento] = useState("PIX");
+  const [formaPagamento, setFormaPagamento] = useState("");
   const [parcelas, setParcelas] = useState("");
   const [bandeira, setBandeira] = useState("");
+  const [observacoes, setObservacoes] = useState("");
   const [saldoRestante, setSaldoRestante] = useState(null);
   const [orcamentoTravado, setOrcamentoTravado] = useState(false);
   const [mensagem, setMensagem] = useState(null);
@@ -55,6 +56,14 @@ function FormularioLancamento() {
   useEffect(() => {
     if (unidades[0] && !unidadeId) setUnidadeId(unidades[0].id);
   }, [unidades]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!valorPago || Number(valorPago) === 0) {
+      setFormaPagamento("");
+      setParcelas("");
+      setBandeira("");
+    }
+  }, [valorPago]);
 
   useEffect(() => {
     supabase.from("categorias").select("*").order("nome").then(({ data }) => setCategorias(data || []));
@@ -121,6 +130,10 @@ function FormularioLancamento() {
       setMensagem({ tipo: "erro", texto: "Selecione a categoria e o tipo de serviço antes de salvar." });
       return;
     }
+    if (Number(valorPago) > 0 && !formaPagamento) {
+      setMensagem({ tipo: "erro", texto: "Selecione a forma de pagamento." });
+      return;
+    }
     if (saldoRestante !== null && Number(valorPago) > saldoRestante) {
       setMensagem({ tipo: "erro", texto: `Valor lançado ultrapassa o saldo restante desta OS. Saldo disponível: R$ ${saldoRestante.toFixed(2)}. Corrija o valor.` });
       return;
@@ -135,10 +148,11 @@ function FormularioLancamento() {
       modelo_id: modeloId || null,
       tipo_servico_id: tipoServicoId,
       orcamento_aprovado: Number(orcamento),
-      valor_pago: Number(valorPago),
-      forma_pagamento: formaPagamento,
+      valor_pago: Number(valorPago) || 0,
+      forma_pagamento: Number(valorPago) > 0 ? formaPagamento : null,
       parcelas: precisaParcelas && parcelas ? Number(parcelas) : null,
       bandeira: precisaBandeira ? bandeira : null,
+      observacoes: observacoes.trim() || null,
       atendente_id: usuario.id,
       criado_por: usuario.id,
     });
@@ -161,9 +175,10 @@ function FormularioLancamento() {
     setTipoServicoId("");
     setOrcamento("");
     setValorPago("");
-    setFormaPagamento("PIX");
+    setFormaPagamento("");
     setParcelas("");
     setBandeira("");
+    setObservacoes("");
     setSaldoRestante(null);
     setOrcamentoTravado(false);
   }
@@ -268,12 +283,19 @@ function FormularioLancamento() {
         </div>
         <div>
           <Rotulo icone={CircleDollarSign}>Valor pago agora</Rotulo>
-          <CurrencyInput valor={valorPago} onChange={setValorPago} required />
+          <CurrencyInput valor={valorPago} onChange={setValorPago} />
           {saldoRestante !== null && <p className="text-xs text-muted mt-1">Saldo restante: R$ {saldoRestante.toFixed(2)}</p>}
         </div>
         <div>
           <Rotulo icone={CreditCard}>Forma de pagamento</Rotulo>
-          <select className="field-input" value={formaPagamento} onChange={(e) => setFormaPagamento(e.target.value)}>
+          <select
+            className="field-input"
+            value={formaPagamento}
+            onChange={(e) => setFormaPagamento(e.target.value)}
+            disabled={!(Number(valorPago) > 0)}
+            required={Number(valorPago) > 0}
+          >
+            <option value="">{Number(valorPago) > 0 ? "Selecione" : "Nenhuma"}</option>
             {FORMAS_PAGAMENTO.map((f) => (
               <option key={f} value={f}>{f}</option>
             ))}
@@ -306,6 +328,16 @@ function FormularioLancamento() {
               </button>
             ))}
           </div>
+        </div>
+
+        <div className="col-span-3">
+          <Rotulo icone={StickyNote}>Observações <span className="normal-case text-muted">(opcional)</span></Rotulo>
+          <textarea
+            className="field-input min-h-[72px] resize-y"
+            value={observacoes}
+            onChange={(e) => setObservacoes(e.target.value)}
+            placeholder="Alguma informação adicional sobre esse lançamento, se necessário…"
+          />
         </div>
 
         {mensagem && (

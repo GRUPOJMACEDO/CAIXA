@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { Search, PlusCircle, Check } from "lucide-react";
+import Modal from "./Modal";
 import { supabase } from "../lib/supabaseClient";
 import { useSessao } from "../lib/SessaoContext";
 
@@ -18,6 +19,7 @@ export default function ComboBoxModelo({ categoriaId, unidadeId, modeloId, onSel
   const [aberto, setAberto] = useState(false);
   const [solicitado, setSolicitado] = useState(false);
   const [enviando, setEnviando] = useState(false);
+  const [confirmando, setConfirmando] = useState(false);
   const containerRef = useRef(null);
 
   useEffect(() => {
@@ -78,6 +80,7 @@ export default function ComboBoxModelo({ categoriaId, unidadeId, modeloId, onSel
       alert("Não foi possível enviar o pedido: " + error.message);
       return;
     }
+    setConfirmando(false);
     setSolicitado(true);
     setAberto(false);
   }
@@ -123,11 +126,10 @@ export default function ComboBoxModelo({ categoriaId, unidadeId, modeloId, onSel
               {texto.trim() && !solicitado && (
                 <button
                   type="button"
-                  onClick={solicitarInclusao}
-                  disabled={enviando}
+                  onClick={() => setConfirmando(true)}
                   className="btn text-xs flex items-center gap-1.5 text-gold border-gold/40 hover:bg-gold-soft/40"
                 >
-                  <PlusCircle size={13} /> {enviando ? "Enviando…" : `Solicitar cadastro de "${texto.trim()}"`}
+                  <PlusCircle size={13} /> {`Solicitar cadastro de "${texto.trim()}"`}
                 </button>
               )}
               {solicitado && (
@@ -138,6 +140,25 @@ export default function ComboBoxModelo({ categoriaId, unidadeId, modeloId, onSel
             </div>
           )}
         </div>
+      )}
+
+      {confirmando && (
+        <Modal titulo="Confirmar solicitação" onFechar={() => setConfirmando(false)} largura="max-w-sm">
+          <p className="text-sm text-ink mb-1">
+            Solicitar o cadastro do modelo <span className="font-semibold">"{texto.trim()}"</span>?
+          </p>
+          <p className="text-xs text-muted mb-5">
+            O pedido fica pendente até quem administra Modelos aprovar.
+          </p>
+          <div className="flex justify-end gap-2">
+            <button type="button" className="btn text-sm" onClick={() => setConfirmando(false)}>
+              Cancelar
+            </button>
+            <button type="button" className="btn-primary text-sm" onClick={solicitarInclusao} disabled={enviando}>
+              {enviando ? "Enviando…" : "Confirmar solicitação"}
+            </button>
+          </div>
+        </Modal>
       )}
     </div>
   );
