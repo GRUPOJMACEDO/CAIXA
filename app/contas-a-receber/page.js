@@ -72,13 +72,14 @@ function ConteudoContasAReceber() {
   const totalFalta = linhasFiltradas.reduce((s, l) => s + Number(l.falta_pagar), 0);
   const percentualFalta = totalOrcamento ? (totalFalta / totalOrcamento) * 100 : 0;
 
-  async function carregarHistorico(unidadeId, numeroOs) {
+  async function carregarHistorico(unidadeId, numeroOs, tipoServicoId) {
     setCarregandoHistorico(true);
     const { data } = await supabase
       .from("lancamentos")
       .select("id, data, valor_pago, forma_pagamento, formas_pagamento, usuarios!atendente_id(nome_completo)")
       .eq("unidade_id", unidadeId)
       .eq("numero_os", numeroOs)
+      .eq("tipo_servico_id", tipoServicoId)
       .order("criado_em", { ascending: true });
     setHistorico(data || []);
     setCarregandoHistorico(false);
@@ -90,7 +91,7 @@ function ConteudoContasAReceber() {
     setFormaPagamento("");
     setFormasPagamentoPopup([]);
     setLinhaEditandoPopup(null);
-    carregarHistorico(linha.unidade_id, linha.numero_os);
+    carregarHistorico(linha.unidade_id, linha.numero_os, linha.tipo_servico_id);
   }
 
   function fecharPopup() {
@@ -144,14 +145,16 @@ function ConteudoContasAReceber() {
     }
 
     const dadosAtualizados = await carregar();
-    const atualizada = dadosAtualizados.find((l) => l.unidade_id === selecionada.unidade_id && l.numero_os === selecionada.numero_os);
+    const atualizada = dadosAtualizados.find(
+      (l) => l.unidade_id === selecionada.unidade_id && l.numero_os === selecionada.numero_os && l.tipo_servico_id === selecionada.tipo_servico_id
+    );
     if (atualizada) {
       // ainda sobrou saldo — mantém o pop-up aberto, pronto para o próximo lançamento
       setSelecionada(atualizada);
       setValorAgora(Number(atualizada.falta_pagar));
       setFormaPagamento("");
       setFormasPagamentoPopup([]);
-      await carregarHistorico(atualizada.unidade_id, atualizada.numero_os);
+      await carregarHistorico(atualizada.unidade_id, atualizada.numero_os, atualizada.tipo_servico_id);
     } else {
       // saldo zerado — a OS some da lista de contas a receber, fecha o pop-up
       fecharPopup();
@@ -272,26 +275,28 @@ function ConteudoContasAReceber() {
             <tr className="text-xs uppercase tracking-wider text-muted border-b border-line">
               {mostrarUnidade && <td className="p-3">Unidade</td>}
               <td className="p-3">Nº OS</td>
+              <td className="p-3">Tipo de serviço</td>
               <td className="p-3 text-right">Orçamento</td>
-              <td className="p-3 text-right">Pago</td>
+              <td className="p-3 text-right"><span className="text-[#3F8A5C] font-bold bg-[#3F8A5C]/10 rounded px-2 py-0.5">Pago</span></td>
               <td className="p-3 text-right">Falta pagar</td>
               <td className="p-3">Último lançamento</td>
             </tr>
           </thead>
           <tbody>
             {linhasFiltradas.length === 0 && (
-              <tr><td className="p-4 text-muted" colSpan={mostrarUnidade ? 6 : 5}>Nenhuma OS em aberto.</td></tr>
+              <tr><td className="p-4 text-muted" colSpan={mostrarUnidade ? 7 : 6}>Nenhuma OS em aberto.</td></tr>
             )}
             {linhasFiltradas.map((l) => (
               <tr
-                key={`${l.unidade_id}-${l.numero_os}`}
+                key={`${l.unidade_id}-${l.numero_os}-${l.tipo_servico_id}`}
                 className="border-t border-line hover:bg-canvas/60 cursor-pointer"
                 onClick={() => abrirPopup(l)}
               >
                 {mostrarUnidade && <td className="p-3">{unidadesMap[l.unidade_id]}</td>}
                 <td className="p-3 font-mono-num">{l.numero_os}</td>
+                <td className="p-3 text-xs text-muted">{l.tipo_servico_nome || "—"}</td>
                 <td className="p-3 text-right font-mono-num">R$ {formatarMoedaSemSimbolo(l.orcamento_aprovado)}</td>
-                <td className="p-3 text-right font-mono-num">R$ {formatarMoedaSemSimbolo(l.total_pago)}</td>
+                <td className="p-3 text-right font-mono-num font-bold text-[#2E6B45] bg-[#3F8A5C]/5">R$ {formatarMoedaSemSimbolo(l.total_pago)}</td>
                 <td className="p-3 text-right font-mono-num font-medium text-bronze">R$ {formatarMoedaSemSimbolo(l.falta_pagar)}</td>
                 <td className="p-3 text-muted">{formatarDataBR(l.ultimo_lancamento)}</td>
               </tr>
@@ -301,7 +306,12 @@ function ConteudoContasAReceber() {
       </div>
 
       {selecionada && (
-        <Modal titulo={`OS ${selecionada.numero_os}`} subtitulo={mostrarUnidade ? unidadesMap[selecionada.unidade_id] : "Quitar saldo em aberto"} onFechar={fecharPopup} largura="max-w-xl">
+        <Modal
+          titulo={`OS ${selecionada.numero_os}`}
+          subtitulo={`${mostrarUnidade ? unidadesMap[selecionada.unidade_id] + " — " : ""}${selecionada.tipo_servico_nome || "Quitar saldo em aberto"}`}
+          onFechar={fecharPopup}
+          largura="max-w-xl"
+        >
           <div className="space-y-4">
             <div className="grid grid-cols-3 gap-3 text-sm">
               <div><p className="text-xs text-muted">Orçamento</p><p className="font-mono-num font-medium">R$ {formatarMoedaSemSimbolo(selecionada.orcamento_aprovado)}</p></div>
@@ -455,10 +465,11 @@ function ConteudoContasAReceber() {
           ) : (
             <div className="space-y-3">
               {lembretes.map((l) => (
-                <div key={`${l.unidade_id}-${l.numero_os}`} className="rounded-lg border border-line p-3 text-sm">
+                <div key={`${l.unidade_id}-${l.numero_os}-${l.tipo_servico_id}`} className="rounded-lg border border-line p-3 text-sm">
                   <p className="text-ink">
                     A OS <span className="font-mono-num font-medium">{l.numero_os}</span>
-                    {mostrarUnidade && <> ({unidadesMap[l.unidade_id]})</>} está com{" "}
+                    {l.tipo_servico_nome && <> ({l.tipo_servico_nome})</>}
+                    {mostrarUnidade && <> — {unidadesMap[l.unidade_id]}</>} está com{" "}
                     <span className="font-mono-num font-medium text-bronze">R$ {formatarMoedaSemSimbolo(l.falta_pagar)}</span> em
                     aberto desde <span className="font-medium">{formatarDataBR(l.ultimo_lancamento)}</span>. Entre em contato com o
                     cliente para efetuar a cobrança.

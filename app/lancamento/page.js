@@ -100,8 +100,9 @@ function FormularioLancamento() {
       });
   }, [categoriaId]);
 
-  // ao sair do campo de OS, valida o formato e verifica se já existe (saldo restante)
-  async function aoSairCampoOS() {
+  // ao sair do campo de OS, só valida o formato — a checagem de saldo (que
+  // depende também do tipo de serviço) roda em verificarSaldoOs()
+  function aoSairCampoOS() {
     const resultado = normalizarNumeroOS(numeroOsDigitado);
     if (!resultado.valido) {
       setErroOs(resultado.erro);
@@ -111,32 +112,47 @@ function FormularioLancamento() {
     }
     setErroOs(null);
     setNumeroOsDigitado(resultado.valor);
+  }
 
-    if (!unidadeId) return;
-    const { data: existentes } = await supabase
-      .from("lancamentos")
-      .select("orcamento_aprovado, valor_pago")
-      .eq("unidade_id", unidadeId)
-      .eq("numero_os", resultado.valor);
-    if (existentes && existentes.length > 0) {
-      const totalPago = existentes.reduce((s, l) => s + Number(l.valor_pago), 0);
-      const jaDefinido = existentes.find((l) => Number(l.orcamento_aprovado) > 0);
-      if (jaDefinido) {
-        const orcamentoOs = Number(jaDefinido.orcamento_aprovado);
-        setOrcamento(orcamentoOs);
-        setOrcamentoTravado(true);
-        setSaldoRestante(orcamentoOs - totalPago);
+  // verifica se essa combinação (unidade + Nº OS + tipo de serviço) já tem
+  // lançamento(s) — cada tipo de serviço da mesma OS é tratado como um
+  // registro independente (ex: "taxa de análise" e "reparo" não dividem o
+  // mesmo orçamento). Roda de novo sempre que o tipo de serviço muda,
+  // porque ele normalmente só é escolhido depois do campo Nº OS.
+  useEffect(() => {
+    async function verificarSaldoOs() {
+      const resultado = normalizarNumeroOS(numeroOsDigitado);
+      if (!resultado.valido || !unidadeId || !tipoServicoId) {
+        setSaldoRestante(null);
+        setOrcamentoTravado(false);
+        return;
+      }
+      const { data: existentes } = await supabase
+        .from("lancamentos")
+        .select("orcamento_aprovado, valor_pago")
+        .eq("unidade_id", unidadeId)
+        .eq("numero_os", resultado.valor)
+        .eq("tipo_servico_id", tipoServicoId);
+      if (existentes && existentes.length > 0) {
+        const totalPago = existentes.reduce((s, l) => s + Number(l.valor_pago), 0);
+        const jaDefinido = existentes.find((l) => Number(l.orcamento_aprovado) > 0);
+        if (jaDefinido) {
+          const orcamentoOs = Number(jaDefinido.orcamento_aprovado);
+          setOrcamento(orcamentoOs);
+          setOrcamentoTravado(true);
+          setSaldoRestante(orcamentoOs - totalPago);
+        } else {
+          setOrcamento("");
+          setOrcamentoTravado(false);
+          setSaldoRestante(null);
+        }
       } else {
-        // essa OS já tem lançamento(s), mas o orçamento ainda não foi definido
-        setOrcamento("");
         setOrcamentoTravado(false);
         setSaldoRestante(null);
       }
-    } else {
-      setOrcamentoTravado(false);
-      setSaldoRestante(null);
     }
-  }
+    verificarSaldoOs();
+  }, [numeroOsDigitado, unidadeId, tipoServicoId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function executarSalvar() {
     setMensagem(null);
