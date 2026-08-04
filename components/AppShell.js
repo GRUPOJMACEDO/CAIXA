@@ -174,7 +174,7 @@ function Shell({ children }) {
 
   return (
     <div className="min-h-screen flex bg-canvas">
-      <aside className={`${largura} shrink-0 bg-sidebar border-r border-line text-ink flex flex-col sticky top-0 h-screen transition-all duration-200`}>
+      <aside className={`${largura} shrink-0 bg-sidebar border-r border-line text-ink flex flex-col sticky top-0 h-screen transition-all duration-200 print:hidden`}>
         <div className={`${recolhido ? "px-3 py-4 flex justify-center" : "px-4 py-3"} border-b border-line`}>
           <img src="/logos/grupo-jmacedo.png" alt="Grupo J.Macedo Eletrônica" className={recolhido ? "h-10 w-auto" : "w-full h-auto"} />
         </div>
@@ -249,7 +249,7 @@ function Shell({ children }) {
       </aside>
 
       <div className="flex-1 min-w-0">
-        <header className="h-14 border-b border-line bg-panel/95 backdrop-blur px-6 flex items-center justify-between sticky top-0 z-10">
+        <header className="h-14 border-b border-line bg-panel/95 backdrop-blur px-6 flex items-center justify-between sticky top-0 z-10 print:hidden">
           <div className="flex items-center gap-3">
             <button onClick={irParaInicio} title="Ir para o início" className="text-muted hover:text-gold transition">
               <Home size={17} />

@@ -1,9 +1,10 @@
 "use client";
 import { useEffect, useState } from "react";
-import { Wallet, CheckCircle2, Clock, Percent, Hash, Lock } from "lucide-react";
+import { Wallet, CheckCircle2, Clock, Percent, Hash, Lock, Store, FileSpreadsheet, Printer } from "lucide-react";
 import AppShell from "../../../components/AppShell";
 import Modal from "../../../components/Modal";
 import BotaoAtualizar from "../../../components/BotaoAtualizar";
+import BotaoAcao3D from "../../../components/BotaoAcao3D";
 import { supabase } from "../../../lib/supabaseClient";
 import { useSessao } from "../../../lib/SessaoContext";
 import { CARGOS } from "../../../lib/permissions";
@@ -30,6 +31,7 @@ function ConteudoVendedores() {
   const [detalhe, setDetalhe] = useState(null);
   const [lancamentosDetalhe, setLancamentosDetalhe] = useState([]);
   const [carregandoDetalhe, setCarregandoDetalhe] = useState(false);
+  const [unidadeFiltro, setUnidadeFiltro] = useState("");
 
   const idsAutorizados = new Set(unidades.map((u) => u.id));
   const abaAtual = ABAS.find((a) => a.id === aba);
@@ -49,10 +51,42 @@ function ConteudoVendedores() {
     carregar();
   }, [aba]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const totalOrcamento = linhas.reduce((s, l) => s + Number(l.orcamento_aprovado), 0);
-  const totalPago = linhas.reduce((s, l) => s + Number(l.valor_pago), 0);
-  const totalFalta = linhas.reduce((s, l) => s + l.falta, 0);
-  const totalQtdOs = linhas.reduce((s, l) => s + Number(l.qtd_os), 0);
+  const mapaUnidades = new Map();
+  linhas.forEach((l) => mapaUnidades.set(l.unidade_id, l.unidade_nome));
+  const unidadesDisponiveis = [...mapaUnidades.entries()]
+    .map(([id, nome]) => ({ id, nome }))
+    .sort((a, b) => a.nome.localeCompare(b.nome));
+
+  const linhasFiltradas = unidadeFiltro ? linhas.filter((l) => l.unidade_id === unidadeFiltro) : linhas;
+
+  const totalOrcamento = linhasFiltradas.reduce((s, l) => s + Number(l.orcamento_aprovado), 0);
+  const totalPago = linhasFiltradas.reduce((s, l) => s + Number(l.valor_pago), 0);
+  const totalFalta = linhasFiltradas.reduce((s, l) => s + l.falta, 0);
+  const totalQtdOs = linhasFiltradas.reduce((s, l) => s + Number(l.qtd_os), 0);
+
+  async function exportarExcel() {
+    const XLSX = await import("xlsx");
+    const linhasExport = linhasFiltradas.map((l, i) => {
+      const base = {
+        "Posição": i + 1,
+        "Atendente": l.nome_completo,
+        "Unidade": l.unidade_nome,
+        "Valor vendido": Number(l.valor_pago),
+      };
+      if (abaAtual.categoria) base["Prêmio (5%)"] = Number(l.premio);
+      base["Qtd. OS"] = Number(l.qtd_os);
+      return base;
+    });
+    const planilha = XLSX.utils.json_to_sheet(linhasExport);
+    const livro = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(livro, planilha, "Vendedores");
+    const sufixoUnidade = unidadeFiltro ? `-${(mapaUnidades.get(unidadeFiltro) || "unidade").replace(/\s+/g, "_")}` : "";
+    XLSX.writeFile(livro, `vendedores-${abaAtual.id}${sufixoUnidade}-${mesReferenciaLabel(inicioMes()).replace(/\s+/g, "_")}.xlsx`);
+  }
+
+  function imprimirTela() {
+    window.print();
+  }
 
   function podeVerDetalhe(linha) {
     if (CARGOS_GESTAO.includes(usuario.cargo)) return idsAutorizados.has(linha.unidade_id);
@@ -92,10 +126,10 @@ function ConteudoVendedores() {
           <h1 className="font-display text-2xl font-semibold text-ink">Vendedores de {mesReferenciaLabel(inicioMes())}</h1>
           <p className="text-sm text-muted mt-1">Ranking por atendente, de todas as unidades.</p>
         </div>
-        <BotaoAtualizar aoAtualizar={carregar} className="shrink-0" />
+        <BotaoAtualizar aoAtualizar={carregar} className="shrink-0 print:hidden" />
       </div>
 
-      <div className="flex gap-2 mb-5">
+      <div className="flex items-center gap-2 mb-5 flex-wrap print:hidden">
         {ABAS.map((a) => (
           <button
             key={a.id}
@@ -107,6 +141,21 @@ function ConteudoVendedores() {
             {a.rotulo}
           </button>
         ))}
+
+        <div className="flex items-center gap-1.5 ml-1">
+          <Store size={13} className="text-muted" />
+          <select className="field-input py-1.5 text-sm w-48" value={unidadeFiltro} onChange={(e) => setUnidadeFiltro(e.target.value)}>
+            <option value="">Todas as unidades</option>
+            {unidadesDisponiveis.map((u) => (
+              <option key={u.id} value={u.id}>{u.nome}</option>
+            ))}
+          </select>
+        </div>
+
+        <div className="flex items-center gap-2 ml-auto">
+          <BotaoAcao3D icone={FileSpreadsheet} rotulo="Exportar Excel" onClick={exportarExcel} cor="teal" disabled={linhasFiltradas.length === 0} />
+          <BotaoAcao3D icone={Printer} rotulo="Imprimir" onClick={imprimirTela} cor="ink" />
+        </div>
       </div>
 
       <div className="grid grid-cols-5 gap-3 mb-6">
@@ -165,8 +214,8 @@ function ConteudoVendedores() {
           </thead>
           <tbody>
             {carregando && <tr><td className="p-4 text-muted" colSpan={abaAtual.categoria ? 5 : 4}>Carregando…</td></tr>}
-            {!carregando && linhas.length === 0 && <tr><td className="p-4 text-muted" colSpan={abaAtual.categoria ? 5 : 4}>Nenhuma venda no período.</td></tr>}
-            {linhas.map((l, i) => (
+            {!carregando && linhasFiltradas.length === 0 && <tr><td className="p-4 text-muted" colSpan={abaAtual.categoria ? 5 : 4}>Nenhuma venda no período{unidadeFiltro ? " para essa unidade" : ""}.</td></tr>}
+            {linhasFiltradas.map((l, i) => (
               <tr key={`${l.usuario_id}-${l.unidade_id}`} className="border-t border-line hover:bg-canvas/60 cursor-pointer" onClick={() => abrirDetalhe(l)}>
                 <td className="p-3">
                   <span className="inline-flex items-center gap-2">

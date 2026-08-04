@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { Wallet, CheckCircle2, Clock, Percent, Hash, Lock } from "lucide-react";
+import { Wallet, CheckCircle2, Clock, Percent, Hash, Lock, Info } from "lucide-react";
 import AppShell from "../../components/AppShell";
 import Modal from "../../components/Modal";
 import BotaoAtualizar from "../../components/BotaoAtualizar";
@@ -91,8 +91,9 @@ function ConteudoDashboard() {
           <div className="h-1.5 bg-[#9C5A34]" />
           <div className="p-4">
             <div className="w-8 h-8 rounded-lg bg-[#9C5A34]/10 flex items-center justify-center text-[#9C5A34] mb-2"><Clock size={16} /></div>
-            <p className="text-xs text-muted mb-1">Total a receber</p>
+            <p className="text-xs text-muted mb-1">Falta pagar (no mês)</p>
             <p className="font-mono-num text-xl font-semibold text-[#9C5A34]">R$ {formatarMoedaSemSimbolo(totalFalta)}</p>
+            <p className="text-[10px] text-muted mt-1 leading-snug">Só das OS movimentadas no mês — para o total em aberto de tudo, veja Contas a Receber.</p>
           </div>
         </div>
         <div className="card overflow-hidden">
@@ -120,7 +121,11 @@ function ConteudoDashboard() {
               <td className="p-3">Unidade</td>
               <td className="p-3 text-right">Orçamento</td>
               <td className="p-3 text-right"><span className="text-[#3F8A5C] font-bold bg-[#3F8A5C]/10 rounded px-2 py-0.5">Pago</span></td>
-              <td className="p-3 text-right">Falta pagar</td>
+              <td className="p-3 text-right">
+                <span className="inline-flex items-center gap-1" title="Só considera o orçamento definido e o valor pago no mês — não é o saldo total em aberto dessas OS. Para o total, veja Contas a Receber.">
+                  Falta pagar <Info size={11} className="text-muted" />
+                </span>
+              </td>
               <td className="p-3 text-right">Qtd. OS</td>
             </tr>
           </thead>
