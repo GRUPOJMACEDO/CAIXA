@@ -32,6 +32,8 @@ function ConteudoVendedores() {
   const [lancamentosDetalhe, setLancamentosDetalhe] = useState([]);
   const [carregandoDetalhe, setCarregandoDetalhe] = useState(false);
   const [unidadeFiltro, setUnidadeFiltro] = useState("");
+  const [detalhesImpressao, setDetalhesImpressao] = useState(null);
+  const [preparandoImpressao, setPreparandoImpressao] = useState(false);
 
   const idsAutorizados = new Set(unidades.map((u) => u.id));
   const abaAtual = ABAS.find((a) => a.id === aba);
@@ -64,19 +66,75 @@ function ConteudoVendedores() {
   const totalFalta = linhasFiltradas.reduce((s, l) => s + l.falta, 0);
   const totalQtdOs = linhasFiltradas.reduce((s, l) => s + Number(l.qtd_os), 0);
 
+  async function buscarDetalhesPorAtendente(linhasAlvo) {
+    const linhasComPermissao = linhasAlvo.filter((l) => podeVerDetalhe(l));
+    if (linhasComPermissao.length === 0) return new Map();
+
+    const unidadeIds = [...new Set(linhasComPermissao.map((l) => l.unidade_id))];
+    const atendenteIds = [...new Set(linhasComPermissao.map((l) => l.usuario_id))];
+
+    let query = supabase
+      .from("lancamentos")
+      .select("id, data, numero_os, unidade_id, atendente_id, valor_pago, tipos_servico(nome)")
+      .in("unidade_id", unidadeIds)
+      .in("atendente_id", atendenteIds)
+      .gte("data", inicioMes())
+      .order("data", { ascending: false });
+
+    if (abaAtual.categoria) {
+      const { data: cat } = await supabase.from("categorias").select("id").eq("nome", abaAtual.categoria).single();
+      query = query.eq("categoria_id", cat?.id);
+    } else {
+      const { data: cat } = await supabase.from("categorias").select("id").eq("nome", "Acessório").single();
+      if (cat) query = query.neq("categoria_id", cat.id);
+    }
+
+    const { data } = await query;
+    const mapa = new Map();
+    (data || []).forEach((l) => {
+      const chave = `${l.atendente_id}::${l.unidade_id}`;
+      if (!mapa.has(chave)) mapa.set(chave, []);
+      mapa.get(chave).push(l);
+    });
+    return mapa;
+  }
+
   async function exportarExcel() {
     const XLSX = await import("xlsx");
-    const linhasExport = linhasFiltradas.map((l, i) => {
-      const base = {
+    const mapaDetalhes = await buscarDetalhesPorAtendente(linhasFiltradas);
+    const linhasExport = [];
+
+    linhasFiltradas.forEach((l, i) => {
+      const resumo = {
         "Posição": i + 1,
         "Atendente": l.nome_completo,
         "Unidade": l.unidade_nome,
-        "Valor vendido": Number(l.valor_pago),
+        "Data": "",
+        "OS": "",
+        "Tipo de serviço": "— RESUMO DO PERÍODO —",
+        "Valor": Number(l.valor_pago),
       };
-      if (abaAtual.categoria) base["Prêmio (5%)"] = Number(l.premio);
-      base["Qtd. OS"] = Number(l.qtd_os);
-      return base;
+      if (abaAtual.categoria) resumo["Prêmio (5%)"] = Number(l.premio);
+      resumo["Qtd. OS"] = Number(l.qtd_os);
+      linhasExport.push(resumo);
+
+      const detalhes = mapaDetalhes.get(`${l.usuario_id}::${l.unidade_id}`) || [];
+      detalhes.forEach((d) => {
+        const linhaDetalhe = {
+          "Posição": "",
+          "Atendente": "",
+          "Unidade": "",
+          "Data": formatarDataBR(d.data),
+          "OS": d.numero_os,
+          "Tipo de serviço": d.tipos_servico?.nome || "",
+          "Valor": Number(d.valor_pago),
+        };
+        if (abaAtual.categoria) linhaDetalhe["Prêmio (5%)"] = "";
+        linhaDetalhe["Qtd. OS"] = "";
+        linhasExport.push(linhaDetalhe);
+      });
     });
+
     const planilha = XLSX.utils.json_to_sheet(linhasExport);
     const livro = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(livro, planilha, "Vendedores");
@@ -84,8 +142,12 @@ function ConteudoVendedores() {
     XLSX.writeFile(livro, `vendedores-${abaAtual.id}${sufixoUnidade}-${mesReferenciaLabel(inicioMes()).replace(/\s+/g, "_")}.xlsx`);
   }
 
-  function imprimirTela() {
-    window.print();
+  async function imprimirTela() {
+    setPreparandoImpressao(true);
+    const mapaDetalhes = await buscarDetalhesPorAtendente(linhasFiltradas);
+    setDetalhesImpressao(mapaDetalhes);
+    setPreparandoImpressao(false);
+    setTimeout(() => window.print(), 80);
   }
 
   function podeVerDetalhe(linha) {
@@ -154,7 +216,13 @@ function ConteudoVendedores() {
 
         <div className="flex items-center gap-2 ml-auto">
           <BotaoAcao3D icone={FileSpreadsheet} rotulo="Exportar Excel" onClick={exportarExcel} cor="teal" disabled={linhasFiltradas.length === 0} />
-          <BotaoAcao3D icone={Printer} rotulo="Imprimir" onClick={imprimirTela} cor="ink" />
+          <BotaoAcao3D
+            icone={Printer}
+            rotulo={preparandoImpressao ? "Preparando…" : "Imprimir"}
+            onClick={imprimirTela}
+            cor="ink"
+            disabled={preparandoImpressao}
+          />
         </div>
       </div>
 
@@ -201,7 +269,7 @@ function ConteudoVendedores() {
         </div>
       </div>
 
-      <div className="card overflow-hidden">
+      <div className="card overflow-hidden print:hidden">
         <table className="w-full text-sm">
           <thead>
             <tr className="text-xs uppercase tracking-wider text-muted border-b border-line">
@@ -230,6 +298,45 @@ function ConteudoVendedores() {
                 <td className="p-3 text-right font-mono-num text-muted">{l.qtd_os}</td>
               </tr>
             ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="hidden print:block card overflow-hidden">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-xs uppercase tracking-wider text-muted border-b border-line">
+              <td className="p-3">Atendente / Data — OS — Tipo de serviço</td>
+              <td className="p-3">Unidade</td>
+              <td className="p-3 text-right">Valor</td>
+              {abaAtual.categoria && <td className="p-3 text-right">Prêmio (5%)</td>}
+              <td className="p-3 text-right">Qtd. OS</td>
+            </tr>
+          </thead>
+          <tbody>
+            {linhasFiltradas.flatMap((l, i) => {
+              const chave = `${l.usuario_id}::${l.unidade_id}`;
+              const detalhes = detalhesImpressao?.get(chave) || [];
+              const linhaResumo = (
+                <tr key={`${chave}-resumo`} className="border-t border-line bg-canvas/60 font-semibold">
+                  <td className="p-3">{i + 1}º {l.nome_completo}</td>
+                  <td className="p-3 text-muted">{l.unidade_nome}</td>
+                  <td className="p-3 text-right font-mono-num">R$ {formatarMoedaSemSimbolo(l.valor_pago)}</td>
+                  {abaAtual.categoria && <td className="p-3 text-right font-mono-num text-gold">R$ {formatarMoedaSemSimbolo(l.premio)}</td>}
+                  <td className="p-3 text-right font-mono-num">{l.qtd_os}</td>
+                </tr>
+              );
+              const linhasDetalhe = detalhes.map((d) => (
+                <tr key={d.id} className="border-t border-line text-muted text-xs">
+                  <td className="py-1.5 pl-8">{formatarDataBR(d.data)} — OS {d.numero_os} — {d.tipos_servico?.nome}</td>
+                  <td></td>
+                  <td className="text-right font-mono-num">R$ {formatarMoedaSemSimbolo(d.valor_pago)}</td>
+                  {abaAtual.categoria && <td></td>}
+                  <td></td>
+                </tr>
+              ));
+              return [linhaResumo, ...linhasDetalhe];
+            })}
           </tbody>
         </table>
       </div>
