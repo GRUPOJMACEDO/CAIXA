@@ -1,16 +1,20 @@
 "use client";
-import { useEffect, useState } from "react";
-import { Save, ReceiptText, Store, CalendarDays, Hash, Tags, Boxes, Wrench, Wallet, CircleDollarSign, CreditCard, Layers, Landmark, StickyNote } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Save, ReceiptText, Store, CalendarDays, Hash, Tags, Boxes, Wrench, Wallet, CircleDollarSign, CreditCard, Layers, Landmark, StickyNote, Ticket, Pencil, Trash2, Plus, X } from "lucide-react";
 import AppShell from "../../components/AppShell";
 import CurrencyInput from "../../components/CurrencyInput";
 import ComboBoxModelo from "../../components/ComboBoxModelo";
+import FormasPagamentoModal from "../../components/FormasPagamentoModal";
 import { supabase } from "../../lib/supabaseClient";
 import { useSessao } from "../../lib/SessaoContext";
 import { podeLancarDataRetroativa } from "../../lib/permissions";
 import { normalizarNumeroOS, REGRA_OS_TEXTO } from "../../lib/validacaoOS";
+import { FORMAS_PAGAMENTO, BANDEIRAS, precisaParcelas as precisaParcelasFn, precisaBandeira as precisaBandeiraFn } from "../../lib/formasPagamento";
 
-const FORMAS_PAGAMENTO = ["PIX", "DÉBITO", "CRÉDITO", "DINHEIRO", "BOLETO", "LINK DE PAGAMENTO"];
-const BANDEIRAS = ["VISA", "MASTERCARD", "ELO", "OUTRA"];
+let proximoIdLinha = 1;
+function gerarIdLinha() {
+  return proximoIdLinha++;
+}
 
 function hoje() {
   return new Date().toISOString().slice(0, 10);
@@ -44,14 +48,21 @@ function FormularioLancamento() {
   const [parcelas, setParcelas] = useState("");
   const [bandeira, setBandeira] = useState("");
   const [observacoes, setObservacoes] = useState("");
+  const [formasPagamento, setFormasPagamento] = useState([]); // preenchido quando usa múltiplas formas
+  const [mostrarModalFormas, setMostrarModalFormas] = useState(false);
+  const [linhaEditando, setLinhaEditando] = useState(null);
+  const snapshotEdicaoRef = useRef(null);
   const [saldoRestante, setSaldoRestante] = useState(null);
   const [orcamentoTravado, setOrcamentoTravado] = useState(false);
   const [mensagem, setMensagem] = useState(null);
   const [salvando, setSalvando] = useState(false);
 
   const dataEditavel = podeLancarDataRetroativa(usuario.cargo);
-  const precisaParcelas = formaPagamento === "CRÉDITO" || formaPagamento === "LINK DE PAGAMENTO";
-  const precisaBandeira = formaPagamento === "CRÉDITO" || formaPagamento === "LINK DE PAGAMENTO" || formaPagamento === "DÉBITO";
+  const precisaParcelasUnica = precisaParcelasFn(formaPagamento);
+  const precisaBandeiraUnica = precisaBandeiraFn(formaPagamento);
+  const usaMultiplasFormas = formasPagamento.length > 0;
+  const totalFormas = formasPagamento.reduce((s, f) => s + (Number(f.valor) || 0), 0);
+  const valorPagoEfetivo = usaMultiplasFormas ? totalFormas : Number(valorPago) || 0;
 
   useEffect(() => {
     if (unidades[0] && !unidadeId) setUnidadeId(unidades[0].id);
@@ -130,11 +141,15 @@ function FormularioLancamento() {
       setMensagem({ tipo: "erro", texto: "Selecione a categoria e o tipo de serviço antes de salvar." });
       return;
     }
-    if (Number(valorPago) > 0 && !formaPagamento) {
+    if (!usaMultiplasFormas && Number(valorPago) > 0 && !formaPagamento) {
       setMensagem({ tipo: "erro", texto: "Selecione a forma de pagamento." });
       return;
     }
-    if (saldoRestante !== null && Number(valorPago) > saldoRestante) {
+    if (usaMultiplasFormas && linhaEditando !== null) {
+      setMensagem({ tipo: "erro", texto: "Finalize a edição da forma de pagamento antes de salvar." });
+      return;
+    }
+    if (saldoRestante !== null && valorPagoEfetivo > saldoRestante) {
       setMensagem({ tipo: "erro", texto: `Valor lançado ultrapassa o saldo restante desta OS. Saldo disponível: R$ ${saldoRestante.toFixed(2)}. Corrija o valor.` });
       return;
     }
@@ -148,10 +163,11 @@ function FormularioLancamento() {
       modelo_id: modeloId || null,
       tipo_servico_id: tipoServicoId,
       orcamento_aprovado: Number(orcamento),
-      valor_pago: Number(valorPago) || 0,
-      forma_pagamento: Number(valorPago) > 0 ? formaPagamento : null,
-      parcelas: precisaParcelas && parcelas ? Number(parcelas) : null,
-      bandeira: precisaBandeira ? bandeira : null,
+      valor_pago: valorPagoEfetivo,
+      forma_pagamento: usaMultiplasFormas ? "MÚLTIPLAS" : (Number(valorPago) > 0 ? formaPagamento : null),
+      parcelas: !usaMultiplasFormas && precisaParcelasUnica && parcelas ? Number(parcelas) : null,
+      bandeira: !usaMultiplasFormas && precisaBandeiraUnica ? bandeira : null,
+      formas_pagamento: usaMultiplasFormas ? formasPagamento.map(({ id, ...resto }) => resto) : null,
       observacoes: observacoes.trim() || null,
       atendente_id: usuario.id,
       criado_por: usuario.id,
@@ -179,6 +195,8 @@ function FormularioLancamento() {
     setParcelas("");
     setBandeira("");
     setObservacoes("");
+    setFormasPagamento([]);
+    setLinhaEditando(null);
     setSaldoRestante(null);
     setOrcamentoTravado(false);
   }
@@ -193,6 +211,70 @@ function FormularioLancamento() {
     if (e.key === "Enter" && e.target.tagName !== "TEXTAREA") {
       e.preventDefault();
       if (window.confirm("Confirmar o lançamento?")) executarSalvar();
+    }
+  }
+
+  function aoSalvarModalFormas(formas) {
+    setFormasPagamento(formas.map((f) => ({ ...f, id: gerarIdLinha() })));
+    setMostrarModalFormas(false);
+    setLinhaEditando(null);
+    setValorPago("");
+    setFormaPagamento("");
+    setParcelas("");
+    setBandeira("");
+  }
+
+  function usarFormaUnica() {
+    if (formasPagamento.length > 0 && !window.confirm("Remover as formas de pagamento já preenchidas e voltar a usar apenas uma?")) return;
+    setFormasPagamento([]);
+    setLinhaEditando(null);
+  }
+
+  function adicionarLinhaInline() {
+    const nova = { id: gerarIdLinha(), valor: "", forma_pagamento: "", parcelas: null, bandeira: null };
+    setFormasPagamento((fs) => [...fs, nova]);
+    snapshotEdicaoRef.current = nova;
+    setLinhaEditando(nova.id);
+  }
+
+  function atualizarCampoLinha(id, campo, valor) {
+    setFormasPagamento((fs) => fs.map((f) => (f.id === id ? { ...f, [campo]: valor } : f)));
+  }
+
+  function iniciarEdicaoLinha(entry) {
+    snapshotEdicaoRef.current = entry;
+    setLinhaEditando(entry.id);
+  }
+
+  function cancelarEdicaoLinha() {
+    const snap = snapshotEdicaoRef.current;
+    if (snap) {
+      if (!snap.forma_pagamento && !snap.valor) {
+        // era uma linha nova, ainda vazia — remove em vez de deixar em branco
+        setFormasPagamento((fs) => fs.filter((f) => f.id !== snap.id));
+      } else {
+        setFormasPagamento((fs) => fs.map((f) => (f.id === snap.id ? snap : f)));
+      }
+    }
+    setLinhaEditando(null);
+    snapshotEdicaoRef.current = null;
+  }
+
+  function salvarEdicaoLinha(entry) {
+    if (!entry.valor || Number(entry.valor) <= 0 || !entry.forma_pagamento) {
+      alert("Preencha o valor e a forma de pagamento antes de salvar esta linha.");
+      return;
+    }
+    setLinhaEditando(null);
+    snapshotEdicaoRef.current = null;
+  }
+
+  function excluirLinha(id) {
+    if (!window.confirm("Remover esta forma de pagamento?")) return;
+    setFormasPagamento((fs) => fs.filter((f) => f.id !== id));
+    if (linhaEditando === id) {
+      setLinhaEditando(null);
+      snapshotEdicaoRef.current = null;
     }
   }
 
@@ -283,52 +365,171 @@ function FormularioLancamento() {
         </div>
         <div>
           <Rotulo icone={CircleDollarSign}>Valor pago agora</Rotulo>
-          <CurrencyInput valor={valorPago} onChange={setValorPago} />
-          {saldoRestante !== null && <p className="text-xs text-muted mt-1">Saldo restante: R$ {saldoRestante.toFixed(2)}</p>}
+          {usaMultiplasFormas ? (
+            <>
+              <CurrencyInput valor={totalFormas} disabled />
+              <p className="text-xs text-muted mt-1">{formasPagamento.length} forma(s) de pagamento — veja abaixo.</p>
+            </>
+          ) : (
+            <>
+              <CurrencyInput valor={valorPago} onChange={setValorPago} />
+              {saldoRestante !== null && <p className="text-xs text-muted mt-1">Saldo restante: R$ {saldoRestante.toFixed(2)}</p>}
+            </>
+          )}
         </div>
         <div>
           <Rotulo icone={CreditCard}>Forma de pagamento</Rotulo>
-          <select
-            className="field-input"
-            value={formaPagamento}
-            onChange={(e) => setFormaPagamento(e.target.value)}
-            disabled={!(Number(valorPago) > 0)}
-            required={Number(valorPago) > 0}
-          >
-            <option value="">{Number(valorPago) > 0 ? "Selecione" : "Nenhuma"}</option>
-            {FORMAS_PAGAMENTO.map((f) => (
-              <option key={f} value={f}>{f}</option>
-            ))}
-          </select>
-        </div>
-
-        <div>
-          <Rotulo icone={Layers}>Parcelas</Rotulo>
-          <select className="field-input" value={parcelas} onChange={(e) => setParcelas(e.target.value)} disabled={!precisaParcelas}>
-            <option value="">1x</option>
-            {[2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
-              <option key={n} value={n}>{n}x</option>
-            ))}
-          </select>
-        </div>
-        <div className="col-span-2">
-          <Rotulo icone={Landmark}>Bandeira</Rotulo>
-          <div className="flex gap-2 flex-wrap">
-            {BANDEIRAS.map((b) => (
+          {usaMultiplasFormas ? (
+            <div className="field-input flex items-center justify-between bg-canvas">
+              <span className="text-sm text-ink">Múltiplas formas</span>
+              <button type="button" onClick={usarFormaUnica} className="text-xs text-muted hover:text-danger transition flex items-center gap-1">
+                <X size={12} /> usar 1 forma
+              </button>
+            </div>
+          ) : (
+            <div className="flex gap-2">
+              <select
+                className="field-input"
+                value={formaPagamento}
+                onChange={(e) => setFormaPagamento(e.target.value)}
+                disabled={!(Number(valorPago) > 0)}
+                required={Number(valorPago) > 0}
+              >
+                <option value="">{Number(valorPago) > 0 ? "Selecione" : "Nenhuma"}</option>
+                {FORMAS_PAGAMENTO.map((f) => (
+                  <option key={f} value={f}>{f}</option>
+                ))}
+              </select>
               <button
                 type="button"
-                key={b}
-                disabled={!precisaBandeira}
-                onClick={() => setBandeira(b)}
-                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border text-sm transition disabled:opacity-40 disabled:cursor-not-allowed ${
-                  bandeira === b ? "border-gold bg-gold-soft/60 text-gold-strong font-medium" : "border-line bg-white text-muted hover:border-gold/50"
-                }`}
+                onClick={() => setMostrarModalFormas(true)}
+                title="Mais de uma forma de pagamento"
+                className="shrink-0 w-[42px] h-[38px] rounded-lg border border-line bg-white text-muted hover:border-gold hover:text-gold-strong hover:bg-gold-soft/30 transition flex items-center justify-center"
               >
-                <CreditCard size={14} /> {b}
+                <Ticket size={16} />
               </button>
-            ))}
-          </div>
+            </div>
+          )}
         </div>
+
+        {!usaMultiplasFormas && (
+          <>
+            <div>
+              <Rotulo icone={Layers}>Parcelas</Rotulo>
+              <select className="field-input" value={parcelas} onChange={(e) => setParcelas(e.target.value)} disabled={!precisaParcelasUnica}>
+                <option value="">1x</option>
+                {[2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
+                  <option key={n} value={n}>{n}x</option>
+                ))}
+              </select>
+            </div>
+            <div className="col-span-2">
+              <Rotulo icone={Landmark}>Bandeira</Rotulo>
+              <div className="flex gap-2 flex-wrap">
+                {BANDEIRAS.map((b) => (
+                  <button
+                    type="button"
+                    key={b}
+                    disabled={!precisaBandeiraUnica}
+                    onClick={() => setBandeira(b)}
+                    className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border text-sm transition disabled:opacity-40 disabled:cursor-not-allowed ${
+                      bandeira === b ? "border-gold bg-gold-soft/60 text-gold-strong font-medium" : "border-line bg-white text-muted hover:border-gold/50"
+                    }`}
+                  >
+                    <CreditCard size={14} /> {b}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </>
+        )}
+
+        {usaMultiplasFormas && (
+          <div className="col-span-3">
+            <Rotulo icone={Ticket}>Formas de pagamento cadastradas</Rotulo>
+            <div className="card divide-y divide-line">
+              {formasPagamento.map((f) =>
+                linhaEditando === f.id ? (
+                  <div key={f.id} className="p-3">
+                    <div className="flex items-start gap-2">
+                      <div className="w-32 shrink-0">
+                        <label className="field-label">Valor</label>
+                        <CurrencyInput valor={f.valor} onChange={(v) => atualizarCampoLinha(f.id, "valor", v)} />
+                      </div>
+                      <div className="flex-1">
+                        <label className="field-label">Forma de pagamento</label>
+                        <select className="field-input" value={f.forma_pagamento} onChange={(e) => atualizarCampoLinha(f.id, "forma_pagamento", e.target.value)}>
+                          <option value="">Selecione</option>
+                          {FORMAS_PAGAMENTO.map((fp) => (
+                            <option key={fp} value={fp}>{fp}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                    {(precisaParcelasFn(f.forma_pagamento) || precisaBandeiraFn(f.forma_pagamento)) && (
+                      <div className="flex items-end gap-2 mt-2">
+                        {precisaParcelasFn(f.forma_pagamento) && (
+                          <div className="w-24 shrink-0">
+                            <label className="field-label">Parcelas</label>
+                            <select className="field-input" value={f.parcelas || ""} onChange={(e) => atualizarCampoLinha(f.id, "parcelas", e.target.value)}>
+                              <option value="">1x</option>
+                              {[2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
+                                <option key={n} value={n}>{n}x</option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
+                        {precisaBandeiraFn(f.forma_pagamento) && (
+                          <div className="flex-1">
+                            <label className="field-label">Bandeira</label>
+                            <div className="flex gap-1.5 flex-wrap">
+                              {BANDEIRAS.map((b) => (
+                                <button
+                                  type="button"
+                                  key={b}
+                                  onClick={() => atualizarCampoLinha(f.id, "bandeira", b)}
+                                  className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-xs transition ${
+                                    f.bandeira === b ? "border-gold bg-gold-soft/60 text-gold-strong font-medium" : "border-line bg-white text-muted hover:border-gold/50"
+                                  }`}
+                                >
+                                  <CreditCard size={12} /> {b}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    <div className="flex justify-end gap-2 mt-3">
+                      <button type="button" className="btn text-xs" onClick={cancelarEdicaoLinha}>Cancelar</button>
+                      <button type="button" className="btn-primary text-xs" onClick={() => salvarEdicaoLinha(f)}>Salvar</button>
+                    </div>
+                  </div>
+                ) : (
+                  <div key={f.id} className="p-3 flex items-center justify-between gap-3 text-sm">
+                    <div className="flex items-center gap-3">
+                      <span className="font-mono-num font-medium">R$ {Number(f.valor).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span>
+                      <span className="text-xs text-muted bg-canvas px-2 py-0.5 rounded">{f.forma_pagamento}</span>
+                      {f.parcelas && <span className="text-xs text-muted">{f.parcelas}x</span>}
+                      {f.bandeira && <span className="text-xs text-muted">{f.bandeira}</span>}
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button type="button" title="Alterar" onClick={() => iniciarEdicaoLinha(f)} className="text-muted hover:text-gold transition p-1">
+                        <Pencil size={14} />
+                      </button>
+                      <button type="button" title="Excluir" onClick={() => excluirLinha(f.id)} className="text-muted hover:text-danger transition p-1">
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  </div>
+                )
+              )}
+            </div>
+            <button type="button" onClick={adicionarLinhaInline} className="btn text-xs flex items-center gap-1.5 mt-2">
+              <Plus size={13} /> Adicionar outra forma de pagamento
+            </button>
+          </div>
+        )}
 
         <div className="col-span-3">
           <Rotulo icone={StickyNote}>Observações <span className="normal-case text-muted">(opcional)</span></Rotulo>
@@ -353,6 +554,13 @@ function FormularioLancamento() {
           </button>
         </div>
       </form>
+
+      <FormasPagamentoModal
+        aberto={mostrarModalFormas}
+        formasIniciais={[]}
+        onFechar={() => setMostrarModalFormas(false)}
+        onSalvar={aoSalvarModalFormas}
+      />
     </div>
   );
 }
