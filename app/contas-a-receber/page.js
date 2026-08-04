@@ -4,6 +4,7 @@ import { Bell } from "lucide-react";
 import AppShell from "../../components/AppShell";
 import Modal from "../../components/Modal";
 import CurrencyInput from "../../components/CurrencyInput";
+import BotaoAtualizar from "../../components/BotaoAtualizar";
 import { supabase } from "../../lib/supabaseClient";
 import { useSessao } from "../../lib/SessaoContext";
 import { podeVerTodasUnidades } from "../../lib/permissions";
@@ -91,14 +92,17 @@ function ConteudoContasAReceber() {
           <p className="text-xs uppercase tracking-wider text-muted mb-1">Operação</p>
           <h1 className="font-display text-2xl font-semibold text-ink">Contas a receber</h1>
         </div>
-        <button onClick={() => setLembretesAbertos(true)} className="relative btn w-10 h-10 p-0" title="Lembretes de cobrança">
-          <Bell size={16} />
-          {lembretes.length > 0 && (
-            <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-danger text-white text-[10px] flex items-center justify-center">
-              {lembretes.length}
-            </span>
-          )}
-        </button>
+        <div className="flex items-center gap-2">
+          <BotaoAtualizar aoAtualizar={carregar} />
+          <button onClick={() => setLembretesAbertos(true)} className="relative btn w-10 h-10 p-0" title="Lembretes de cobrança">
+            <Bell size={16} />
+            {lembretes.length > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-danger text-white text-[10px] flex items-center justify-center">
+                {lembretes.length}
+              </span>
+            )}
+          </button>
+        </div>
       </div>
 
       {mostrarUnidade && (

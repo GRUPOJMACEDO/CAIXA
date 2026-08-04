@@ -169,7 +169,7 @@ function Shell({ children }) {
   function irParaInicio() {
     ignorarProximaAutoAbertura.current = true;
     setSecaoAberta(null);
-    router.push("/dashboard");
+    router.push("/dashboard/valores-diario");
   }
 
   return (

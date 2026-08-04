@@ -119,11 +119,19 @@ function FormularioLancamento() {
       .eq("unidade_id", unidadeId)
       .eq("numero_os", resultado.valor);
     if (existentes && existentes.length > 0) {
-      const orcamentoOs = existentes[0].orcamento_aprovado;
       const totalPago = existentes.reduce((s, l) => s + Number(l.valor_pago), 0);
-      setOrcamento(orcamentoOs);
-      setOrcamentoTravado(true);
-      setSaldoRestante(orcamentoOs - totalPago);
+      const jaDefinido = existentes.find((l) => Number(l.orcamento_aprovado) > 0);
+      if (jaDefinido) {
+        const orcamentoOs = Number(jaDefinido.orcamento_aprovado);
+        setOrcamento(orcamentoOs);
+        setOrcamentoTravado(true);
+        setSaldoRestante(orcamentoOs - totalPago);
+      } else {
+        // essa OS já tem lançamento(s), mas o orçamento ainda não foi definido
+        setOrcamento("");
+        setOrcamentoTravado(false);
+        setSaldoRestante(null);
+      }
     } else {
       setOrcamentoTravado(false);
       setSaldoRestante(null);
@@ -162,7 +170,7 @@ function FormularioLancamento() {
       categoria_id: categoriaId,
       modelo_id: modeloId || null,
       tipo_servico_id: tipoServicoId,
-      orcamento_aprovado: Number(orcamento),
+      orcamento_aprovado: Number(orcamento) || 0,
       valor_pago: valorPagoEfetivo,
       forma_pagamento: usaMultiplasFormas ? "MÚLTIPLAS" : (Number(valorPago) > 0 ? formaPagamento : null),
       parcelas: !usaMultiplasFormas && precisaParcelasUnica && parcelas ? Number(parcelas) : null,
@@ -359,9 +367,13 @@ function FormularioLancamento() {
         </div>
 
         <div>
-          <Rotulo icone={Wallet}>Orçamento aprovado</Rotulo>
-          <CurrencyInput valor={orcamento} onChange={setOrcamento} disabled={orcamentoTravado} required />
-          {orcamentoTravado && <p className="text-xs text-muted mt-1">Travado nesta OS.</p>}
+          <Rotulo icone={Wallet}>Orçamento aprovado <span className="normal-case text-muted">(opcional)</span></Rotulo>
+          <CurrencyInput valor={orcamento} onChange={setOrcamento} disabled={orcamentoTravado} />
+          {orcamentoTravado ? (
+            <p className="text-xs text-muted mt-1">Travado nesta OS.</p>
+          ) : (
+            <p className="text-xs text-muted mt-1">Deixe em branco se ainda não foi definido (ex: cliente pagou só a taxa de análise).</p>
+          )}
         </div>
         <div>
           <Rotulo icone={CircleDollarSign}>Valor pago agora</Rotulo>

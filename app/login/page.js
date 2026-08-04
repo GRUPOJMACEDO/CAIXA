@@ -35,7 +35,7 @@ export default function LoginPage() {
       setErro("Login ou senha inválidos.");
       return;
     }
-    router.push("/dashboard");
+    router.push("/dashboard/valores-diario");
   }
 
   return (

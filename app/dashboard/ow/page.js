@@ -79,12 +79,12 @@ function ConteudoOW() {
             <p className="font-mono-num text-xl font-semibold text-ink">R$ {formatarMoedaSemSimbolo(totalOrcamento)}</p>
           </div>
         </div>
-        <div className="card overflow-hidden">
+        <div className="card overflow-hidden border-2 border-[#3F8A5C]/50 shadow-[0_0_0_3px_rgba(63,138,92,0.08)]">
           <div className="h-1.5 bg-[#3F8A5C]" />
           <div className="p-4">
             <div className="w-8 h-8 rounded-lg bg-[#3F8A5C]/10 flex items-center justify-center text-[#3F8A5C] mb-2"><CheckCircle2 size={16} /></div>
-            <p className="text-xs text-muted mb-1">Valor pago</p>
-            <p className="font-mono-num text-xl font-semibold text-ink">R$ {formatarMoedaSemSimbolo(totalPago)}</p>
+            <p className="text-xs text-[#3F8A5C] font-semibold mb-1">Valor pago</p>
+            <p className="font-mono-num text-xl font-bold text-[#2E6B45]">R$ {formatarMoedaSemSimbolo(totalPago)}</p>
           </div>
         </div>
         <div className="card overflow-hidden">
@@ -119,7 +119,7 @@ function ConteudoOW() {
             <tr className="text-xs uppercase tracking-wider text-muted border-b border-line">
               <td className="p-3">Unidade</td>
               <td className="p-3 text-right">Orçamento</td>
-              <td className="p-3 text-right">Pago</td>
+              <td className="p-3 text-right"><span className="text-[#3F8A5C] font-bold bg-[#3F8A5C]/10 rounded px-2 py-0.5">Pago</span></td>
               <td className="p-3 text-right">Falta pagar</td>
               <td className="p-3 text-right">Qtd. OS</td>
             </tr>
@@ -136,7 +136,7 @@ function ConteudoOW() {
                   </span>
                 </td>
                 <td className="p-3 text-right font-mono-num">R$ {formatarMoedaSemSimbolo(l.orcamento_aprovado)}</td>
-                <td className="p-3 text-right font-mono-num font-medium">R$ {formatarMoedaSemSimbolo(l.valor_pago)}</td>
+                <td className="p-3 text-right font-mono-num font-bold text-[#2E6B45] bg-[#3F8A5C]/5">R$ {formatarMoedaSemSimbolo(l.valor_pago)}</td>
                 <td className="p-3 text-right font-mono-num text-muted">R$ {formatarMoedaSemSimbolo(l.falta)}</td>
                 <td className="p-3 text-right font-mono-num text-muted">{l.qtd_os}</td>
               </tr>

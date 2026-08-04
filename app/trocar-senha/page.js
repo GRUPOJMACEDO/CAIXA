@@ -32,7 +32,7 @@ export default function TrocarSenhaPage() {
       setErro(error.message);
       return;
     }
-    router.push("/dashboard");
+    router.push("/dashboard/valores-diario");
   }
 
   return (
