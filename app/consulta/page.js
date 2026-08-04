@@ -1,16 +1,21 @@
 "use client";
-import { useEffect, useState } from "react";
-import { Search, X, FileDown, Pencil, SearchX, Trash2, AlertTriangle } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Search, X, FileDown, Pencil, SearchX, Trash2, AlertTriangle, Ticket, Plus, StickyNote } from "lucide-react";
 import AppShell from "../../components/AppShell";
 import Modal from "../../components/Modal";
 import CurrencyInput from "../../components/CurrencyInput";
+import FormasPagamentoModal from "../../components/FormasPagamentoModal";
 import { supabase } from "../../lib/supabaseClient";
 import { useSessao } from "../../lib/SessaoContext";
 import { podeAlterar, podeExcluirLancamento } from "../../lib/permissions";
 import { iconeCategoria } from "../../lib/iconesCategoria";
 import { formatarDataBR, formatarMoedaSemSimbolo } from "../../lib/formato";
+import { FORMAS_PAGAMENTO, BANDEIRAS, precisaParcelas as precisaParcelasFn, precisaBandeira as precisaBandeiraFn } from "../../lib/formasPagamento";
 
-const FORMAS_PAGAMENTO = ["PIX", "DÉBITO", "CRÉDITO", "DINHEIRO", "BOLETO", "LINK DE PAGAMENTO"];
+let proximoIdLinhaConsulta = 1;
+function gerarIdLinhaConsulta() {
+  return proximoIdLinhaConsulta++;
+}
 
 function paraCSV(linhas, mostrarUnidade) {
   const cabecalho = ["Data", ...(mostrarUnidade ? ["Unidade"] : []), "Nº OS", "Categoria", "Tipo de Serviço", "Orçamento Aprovado", "Valor Pago"];
@@ -44,6 +49,10 @@ function Conteudo() {
   const [excluindo, setExcluindo] = useState(false);
   const [motivoExclusao, setMotivoExclusao] = useState("");
   const [processandoExclusao, setProcessandoExclusao] = useState(false);
+  const [formasPagamentoEdicao, setFormasPagamentoEdicao] = useState([]);
+  const [mostrarModalFormasEdicao, setMostrarModalFormasEdicao] = useState(false);
+  const [linhaEditandoEdicao, setLinhaEditandoEdicao] = useState(null);
+  const snapshotEdicaoConsultaRef = useRef(null);
   const mostrarUnidade = unidades.length > 1;
   const podeEditar = podeAlterar(usuario.cargo);
   const podeExcluir = podeExcluirLancamento(usuario.cargo);
@@ -58,7 +67,7 @@ function Conteudo() {
     let query = supabase
       .from("lancamentos")
       .select(
-        "id, data, numero_os, valor_pago, orcamento_aprovado, forma_pagamento, parcelas, bandeira, unidade_id, categoria_id, tipo_servico_id, unidades(nome), categorias(nome), tipos_servico(nome), usuarios!atendente_id(nome_completo)"
+        "id, data, numero_os, valor_pago, orcamento_aprovado, forma_pagamento, parcelas, bandeira, formas_pagamento, observacoes, unidade_id, categoria_id, tipo_servico_id, unidades(nome), categorias(nome), tipos_servico(nome), usuarios!atendente_id(nome_completo)"
       )
       .in("unidade_id", unidadeId ? [unidadeId] : unidades.map((u) => u.id))
       .order("data", { ascending: false })
@@ -100,10 +109,18 @@ function Conteudo() {
     setEdicao({
       orcamento_aprovado: Number(item.orcamento_aprovado),
       valor_pago: Number(item.valor_pago),
-      forma_pagamento: item.forma_pagamento,
+      forma_pagamento: item.forma_pagamento === "MÚLTIPLAS" ? "" : item.forma_pagamento || "",
       parcelas: item.parcelas || "",
       bandeira: item.bandeira || "",
+      observacoes: item.observacoes || "",
     });
+    setFormasPagamentoEdicao(
+      item.formas_pagamento && item.formas_pagamento.length > 0
+        ? item.formas_pagamento.map((f) => ({ ...f, id: gerarIdLinhaConsulta() }))
+        : []
+    );
+    setMostrarModalFormasEdicao(false);
+    setLinhaEditandoEdicao(null);
   }
 
   async function confirmarExclusao() {
@@ -134,15 +151,29 @@ function Conteudo() {
   }
 
   async function salvarEdicao() {
+    const usaMultiplas = formasPagamentoEdicao.length > 0;
+    if (usaMultiplas && linhaEditandoEdicao !== null) {
+      alert("Finalize a edição da forma de pagamento antes de salvar.");
+      return;
+    }
+    if (!usaMultiplas && Number(edicao.valor_pago) > 0 && !edicao.forma_pagamento) {
+      alert("Selecione a forma de pagamento.");
+      return;
+    }
+    const totalFormas = formasPagamentoEdicao.reduce((s, f) => s + (Number(f.valor) || 0), 0);
+    const valorPagoEfetivo = usaMultiplas ? totalFormas : Number(edicao.valor_pago) || 0;
+
     setSalvando(true);
     const { error } = await supabase
       .from("lancamentos")
       .update({
-        orcamento_aprovado: Number(edicao.orcamento_aprovado),
-        valor_pago: Number(edicao.valor_pago),
-        forma_pagamento: edicao.forma_pagamento,
-        parcelas: edicao.parcelas ? Number(edicao.parcelas) : null,
-        bandeira: edicao.bandeira || null,
+        orcamento_aprovado: Number(edicao.orcamento_aprovado) || 0,
+        valor_pago: valorPagoEfetivo,
+        forma_pagamento: usaMultiplas ? "MÚLTIPLAS" : (Number(edicao.valor_pago) > 0 ? edicao.forma_pagamento : null),
+        parcelas: !usaMultiplas && precisaParcelasFn(edicao.forma_pagamento) && edicao.parcelas ? Number(edicao.parcelas) : null,
+        bandeira: !usaMultiplas && precisaBandeiraFn(edicao.forma_pagamento) ? edicao.bandeira || null : null,
+        formas_pagamento: usaMultiplas ? formasPagamentoEdicao.map(({ id, ...resto }) => resto) : null,
+        observacoes: edicao.observacoes?.trim() || null,
         alterado_por: usuario.id,
         alterado_em: new Date().toISOString(),
       })
@@ -152,11 +183,75 @@ function Conteudo() {
       alert("Erro ao salvar: " + error.message);
       return;
     }
-    setResultados((atual) =>
-      atual.map((r) => (r.id === selecionado.id ? { ...r, ...edicao, orcamento_aprovado: edicao.orcamento_aprovado, valor_pago: edicao.valor_pago } : r))
-    );
+    const atualizado = {
+      ...edicao,
+      valor_pago: valorPagoEfetivo,
+      forma_pagamento: usaMultiplas ? "MÚLTIPLAS" : (Number(edicao.valor_pago) > 0 ? edicao.forma_pagamento : null),
+      formas_pagamento: usaMultiplas ? formasPagamentoEdicao.map(({ id, ...resto }) => resto) : null,
+    };
+    setResultados((atual) => atual.map((r) => (r.id === selecionado.id ? { ...r, ...atualizado } : r)));
     setEditando(false);
     setSelecionado(null);
+  }
+
+  function aoSalvarModalFormasEdicao(formas) {
+    setFormasPagamentoEdicao(formas.map((f) => ({ ...f, id: gerarIdLinhaConsulta() })));
+    setMostrarModalFormasEdicao(false);
+    setLinhaEditandoEdicao(null);
+    setEdicao((ed) => ({ ...ed, valor_pago: "", forma_pagamento: "", parcelas: "", bandeira: "" }));
+  }
+
+  function usarFormaUnicaEdicao() {
+    if (formasPagamentoEdicao.length > 0 && !window.confirm("Remover as formas de pagamento já preenchidas e voltar a usar apenas uma?")) return;
+    setFormasPagamentoEdicao([]);
+    setLinhaEditandoEdicao(null);
+  }
+
+  function adicionarLinhaInlineEdicao() {
+    const nova = { id: gerarIdLinhaConsulta(), valor: "", forma_pagamento: "", parcelas: null, bandeira: null };
+    setFormasPagamentoEdicao((fs) => [...fs, nova]);
+    snapshotEdicaoConsultaRef.current = nova;
+    setLinhaEditandoEdicao(nova.id);
+  }
+
+  function atualizarCampoLinhaEdicao(id, campo, valor) {
+    setFormasPagamentoEdicao((fs) => fs.map((f) => (f.id === id ? { ...f, [campo]: valor } : f)));
+  }
+
+  function iniciarEdicaoLinhaEdicao(entry) {
+    snapshotEdicaoConsultaRef.current = entry;
+    setLinhaEditandoEdicao(entry.id);
+  }
+
+  function cancelarEdicaoLinhaEdicao() {
+    const snap = snapshotEdicaoConsultaRef.current;
+    if (snap) {
+      if (!snap.forma_pagamento && !snap.valor) {
+        setFormasPagamentoEdicao((fs) => fs.filter((f) => f.id !== snap.id));
+      } else {
+        setFormasPagamentoEdicao((fs) => fs.map((f) => (f.id === snap.id ? snap : f)));
+      }
+    }
+    setLinhaEditandoEdicao(null);
+    snapshotEdicaoConsultaRef.current = null;
+  }
+
+  function salvarEdicaoLinhaEdicao(entry) {
+    if (!entry.valor || Number(entry.valor) <= 0 || !entry.forma_pagamento) {
+      alert("Preencha o valor e a forma de pagamento antes de salvar esta linha.");
+      return;
+    }
+    setLinhaEditandoEdicao(null);
+    snapshotEdicaoConsultaRef.current = null;
+  }
+
+  function excluirLinhaEdicao(id) {
+    if (!window.confirm("Remover esta forma de pagamento?")) return;
+    setFormasPagamentoEdicao((fs) => fs.filter((f) => f.id !== id));
+    if (linhaEditandoEdicao === id) {
+      setLinhaEditandoEdicao(null);
+      snapshotEdicaoConsultaRef.current = null;
+    }
   }
 
   return (
@@ -337,8 +432,30 @@ function Conteudo() {
                 <div><p className="text-xs text-muted">Atendente</p><p className="font-medium">{selecionado.usuarios?.nome_completo}</p></div>
                 <div><p className="text-xs text-muted">Orçamento aprovado</p><p className="font-mono-num font-medium">R$ {formatarMoedaSemSimbolo(selecionado.orcamento_aprovado)}</p></div>
                 <div><p className="text-xs text-muted">Valor pago</p><p className="font-mono-num font-medium">R$ {formatarMoedaSemSimbolo(selecionado.valor_pago)}</p></div>
-                <div><p className="text-xs text-muted">Forma de pagamento</p><p className="font-medium">{selecionado.forma_pagamento}</p></div>
-                <div><p className="text-xs text-muted">Bandeira / Parcelas</p><p className="font-medium">{selecionado.bandeira || "—"} {selecionado.parcelas ? `· ${selecionado.parcelas}x` : ""}</p></div>
+                {selecionado.forma_pagamento === "MÚLTIPLAS" ? (
+                  <div className="col-span-2">
+                    <p className="text-xs text-muted mb-1">Formas de pagamento</p>
+                    <div className="space-y-1">
+                      {(selecionado.formas_pagamento || []).map((f, i) => (
+                        <p key={i} className="font-medium text-sm">
+                          R$ {formatarMoedaSemSimbolo(f.valor)} — {f.forma_pagamento}
+                          {f.parcelas ? ` · ${f.parcelas}x` : ""}{f.bandeira ? ` · ${f.bandeira}` : ""}
+                        </p>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div><p className="text-xs text-muted">Forma de pagamento</p><p className="font-medium">{selecionado.forma_pagamento || "Nenhuma"}</p></div>
+                    <div><p className="text-xs text-muted">Bandeira / Parcelas</p><p className="font-medium">{selecionado.bandeira || "—"} {selecionado.parcelas ? `· ${selecionado.parcelas}x` : ""}</p></div>
+                  </>
+                )}
+                {selecionado.observacoes && (
+                  <div className="col-span-2">
+                    <p className="text-xs text-muted">Observações</p>
+                    <p className="font-medium whitespace-pre-wrap">{selecionado.observacoes}</p>
+                  </div>
+                )}
               </div>
               <div className="flex justify-end gap-2">
                 {podeExcluir && (
@@ -357,24 +474,144 @@ function Conteudo() {
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="field-label">Orçamento aprovado</label>
+                  <label className="field-label">Orçamento aprovado <span className="normal-case text-muted">(opcional)</span></label>
                   <CurrencyInput valor={edicao.orcamento_aprovado} onChange={(v) => setEdicao({ ...edicao, orcamento_aprovado: v })} />
                 </div>
                 <div>
                   <label className="field-label">Valor pago</label>
-                  <CurrencyInput valor={edicao.valor_pago} onChange={(v) => setEdicao({ ...edicao, valor_pago: v })} />
+                  {formasPagamentoEdicao.length > 0 ? (
+                    <CurrencyInput valor={formasPagamentoEdicao.reduce((s, f) => s + (Number(f.valor) || 0), 0)} disabled />
+                  ) : (
+                    <CurrencyInput valor={edicao.valor_pago} onChange={(v) => setEdicao({ ...edicao, valor_pago: v })} />
+                  )}
                 </div>
-                <div>
+
+                <div className="col-span-2">
                   <label className="field-label">Forma de pagamento</label>
-                  <select className="field-input" value={edicao.forma_pagamento} onChange={(e) => setEdicao({ ...edicao, forma_pagamento: e.target.value })}>
-                    {FORMAS_PAGAMENTO.map((f) => (
-                      <option key={f} value={f}>{f}</option>
-                    ))}
-                  </select>
+                  {formasPagamentoEdicao.length > 0 ? (
+                    <div className="field-input flex items-center justify-between bg-canvas">
+                      <span className="text-sm text-ink">Múltiplas formas</span>
+                      <button type="button" onClick={usarFormaUnicaEdicao} className="text-xs text-muted hover:text-danger transition flex items-center gap-1">
+                        <X size={12} /> usar 1 forma
+                      </button>
+                    </div>
+                  ) : (
+                    <div>
+                      <select
+                        className="field-input"
+                        value={edicao.forma_pagamento}
+                        onChange={(e) => setEdicao({ ...edicao, forma_pagamento: e.target.value })}
+                        disabled={!(Number(edicao.valor_pago) > 0)}
+                      >
+                        <option value="">{Number(edicao.valor_pago) > 0 ? "Selecione" : "Nenhuma"}</option>
+                        {FORMAS_PAGAMENTO.map((f) => (
+                          <option key={f} value={f}>{f}</option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => setMostrarModalFormasEdicao(true)}
+                        className="mt-1.5 w-full flex items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-white
+                          bg-gradient-to-b from-gold to-gold-strong shadow-sm hover:brightness-105 hover:-translate-y-px active:translate-y-0 transition-all"
+                      >
+                        <Ticket size={13} /> Dividir em mais de uma forma
+                      </button>
+                    </div>
+                  )}
                 </div>
-                <div>
-                  <label className="field-label">Bandeira</label>
-                  <input className="field-input" value={edicao.bandeira} onChange={(e) => setEdicao({ ...edicao, bandeira: e.target.value.toUpperCase() })} />
+
+                {formasPagamentoEdicao.length === 0 && (precisaParcelasFn(edicao.forma_pagamento) || precisaBandeiraFn(edicao.forma_pagamento)) && (
+                  <>
+                    {precisaParcelasFn(edicao.forma_pagamento) && (
+                      <div>
+                        <label className="field-label">Parcelas</label>
+                        <select className="field-input" value={edicao.parcelas} onChange={(e) => setEdicao({ ...edicao, parcelas: e.target.value })}>
+                          <option value="">1x</option>
+                          {[2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
+                            <option key={n} value={n}>{n}x</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                    {precisaBandeiraFn(edicao.forma_pagamento) && (
+                      <div className={precisaParcelasFn(edicao.forma_pagamento) ? "" : "col-span-2"}>
+                        <label className="field-label">Bandeira</label>
+                        <div className="flex gap-1.5 flex-wrap">
+                          {BANDEIRAS.map((b) => (
+                            <button
+                              type="button"
+                              key={b}
+                              onClick={() => setEdicao({ ...edicao, bandeira: b })}
+                              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-xs transition ${
+                                edicao.bandeira === b ? "border-gold bg-gold-soft/60 text-gold-strong font-medium" : "border-line bg-white text-muted hover:border-gold/50"
+                              }`}
+                            >
+                              {b}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {formasPagamentoEdicao.length > 0 && (
+                  <div className="col-span-2">
+                    <div className="card divide-y divide-line">
+                      {formasPagamentoEdicao.map((f) =>
+                        linhaEditandoEdicao === f.id ? (
+                          <div key={f.id} className="p-3">
+                            <div className="flex items-start gap-2">
+                              <div className="w-28 shrink-0">
+                                <label className="field-label">Valor</label>
+                                <CurrencyInput valor={f.valor} onChange={(v) => atualizarCampoLinhaEdicao(f.id, "valor", v)} />
+                              </div>
+                              <div className="flex-1">
+                                <label className="field-label">Forma</label>
+                                <select className="field-input" value={f.forma_pagamento} onChange={(e) => atualizarCampoLinhaEdicao(f.id, "forma_pagamento", e.target.value)}>
+                                  <option value="">Selecione</option>
+                                  {FORMAS_PAGAMENTO.map((fp) => (
+                                    <option key={fp} value={fp}>{fp}</option>
+                                  ))}
+                                </select>
+                              </div>
+                            </div>
+                            <div className="flex justify-end gap-2 mt-2">
+                              <button type="button" className="btn text-xs" onClick={cancelarEdicaoLinhaEdicao}>Cancelar</button>
+                              <button type="button" className="btn-primary text-xs" onClick={() => salvarEdicaoLinhaEdicao(f)}>Salvar</button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div key={f.id} className="p-3 flex items-center justify-between gap-3 text-sm">
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono-num font-medium">R$ {Number(f.valor).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span>
+                              <span className="text-xs text-muted bg-canvas px-2 py-0.5 rounded">{f.forma_pagamento}</span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <button type="button" title="Alterar" onClick={() => iniciarEdicaoLinhaEdicao(f)} className="text-muted hover:text-gold transition p-1">
+                                <Pencil size={14} />
+                              </button>
+                              <button type="button" title="Excluir" onClick={() => excluirLinhaEdicao(f.id)} className="text-muted hover:text-danger transition p-1">
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          </div>
+                        )
+                      )}
+                    </div>
+                    <button type="button" onClick={adicionarLinhaInlineEdicao} className="btn text-xs flex items-center gap-1.5 mt-2">
+                      <Plus size={13} /> Adicionar outra forma de pagamento
+                    </button>
+                  </div>
+                )}
+
+                <div className="col-span-2">
+                  <label className="field-label flex items-center gap-1.5"><StickyNote size={12} className="text-muted" /> Observações <span className="normal-case text-muted">(opcional)</span></label>
+                  <textarea
+                    className="field-input min-h-[60px] resize-y"
+                    value={edicao.observacoes || ""}
+                    onChange={(e) => setEdicao({ ...edicao, observacoes: e.target.value })}
+                  />
                 </div>
               </div>
               <p className="text-xs text-muted">Toda alteração fica registrada no log do sistema para auditoria.</p>
@@ -387,6 +624,13 @@ function Conteudo() {
             </div>
           )}
         </Modal>
+
+        <FormasPagamentoModal
+          aberto={mostrarModalFormasEdicao}
+          formasIniciais={[]}
+          onFechar={() => setMostrarModalFormasEdicao(false)}
+          onSalvar={aoSalvarModalFormasEdicao}
+        />
       )}
     </div>
   );
