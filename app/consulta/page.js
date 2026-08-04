@@ -386,11 +386,12 @@ function Conteudo() {
       )}
 
       {selecionado && (
-        <Modal
-          titulo={`OS ${selecionado.numero_os}`}
-          subtitulo={mostrarUnidade ? selecionado.unidades?.nome : undefined}
-          onFechar={() => setSelecionado(null)}
-        >
+        <>
+          <Modal
+            titulo={`OS ${selecionado.numero_os}`}
+            subtitulo={mostrarUnidade ? selecionado.unidades?.nome : undefined}
+            onFechar={() => setSelecionado(null)}
+          >
           {excluindo ? (
             <div className="space-y-4">
               <div className="flex items-start gap-2 text-sm text-danger">
@@ -625,12 +626,13 @@ function Conteudo() {
           )}
         </Modal>
 
-        <FormasPagamentoModal
-          aberto={mostrarModalFormasEdicao}
-          formasIniciais={[]}
-          onFechar={() => setMostrarModalFormasEdicao(false)}
-          onSalvar={aoSalvarModalFormasEdicao}
-        />
+          <FormasPagamentoModal
+            aberto={mostrarModalFormasEdicao}
+            formasIniciais={[]}
+            onFechar={() => setMostrarModalFormasEdicao(false)}
+            onSalvar={aoSalvarModalFormasEdicao}
+          />
+        </>
       )}
     </div>
   );
