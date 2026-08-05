@@ -24,7 +24,7 @@ const ABAS = [
 ];
 
 function ConteudoVendedores() {
-  const { usuario, unidades } = useSessao();
+  const { usuario, unidades, linhaFiltro } = useSessao();
   const [aba, setAba] = useState("orcamentos");
   const [linhas, setLinhas] = useState([]);
   const [carregando, setCarregando] = useState(true);
@@ -40,7 +40,9 @@ function ConteudoVendedores() {
 
   async function carregar() {
     setCarregando(true);
-    const { data } = await supabase.from(abaAtual.view).select("*");
+    let query = supabase.from(abaAtual.view).select("*");
+    if (linhaFiltro) query = query.eq("linha", linhaFiltro);
+    const { data } = await query;
     const lista = (data || [])
       .map((v) => ({ ...v, falta: Number(v.orcamento_aprovado) - Number(v.valor_pago), premio: Number(v.valor_pago) * 0.05 }))
       .filter((v) => Number(v.valor_pago) > 0 || Number(v.qtd_os) > 0)
@@ -51,7 +53,7 @@ function ConteudoVendedores() {
 
   useEffect(() => {
     carregar();
-  }, [aba]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [aba, linhaFiltro]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const mapaUnidades = new Map();
   linhas.forEach((l) => mapaUnidades.set(l.unidade_id, l.unidade_nome));
@@ -75,11 +77,13 @@ function ConteudoVendedores() {
 
     let query = supabase
       .from("lancamentos")
-      .select("id, data, numero_os, unidade_id, atendente_id, valor_pago, tipos_servico(nome)")
+      .select("id, data, numero_os, unidade_id, atendente_id, linha, valor_pago, tipos_servico(nome)")
       .in("unidade_id", unidadeIds)
       .in("atendente_id", atendenteIds)
       .gte("data", inicioMes())
       .order("data", { ascending: false });
+
+    if (linhaFiltro) query = query.eq("linha", linhaFiltro);
 
     if (abaAtual.categoria) {
       const { data: cat } = await supabase.from("categorias").select("id").eq("nome", abaAtual.categoria).single();
@@ -92,7 +96,7 @@ function ConteudoVendedores() {
     const { data } = await query;
     const mapa = new Map();
     (data || []).forEach((l) => {
-      const chave = `${l.atendente_id}::${l.unidade_id}`;
+      const chave = `${l.atendente_id}::${l.unidade_id}::${l.linha}`;
       if (!mapa.has(chave)) mapa.set(chave, []);
       mapa.get(chave).push(l);
     });
@@ -118,7 +122,7 @@ function ConteudoVendedores() {
       resumo["Qtd. OS"] = Number(l.qtd_os);
       linhasExport.push(resumo);
 
-      const detalhes = mapaDetalhes.get(`${l.usuario_id}::${l.unidade_id}`) || [];
+      const detalhes = mapaDetalhes.get(`${l.usuario_id}::${l.unidade_id}::${l.linha}`) || [];
       detalhes.forEach((d) => {
         const linhaDetalhe = {
           "Posição": "",
@@ -164,6 +168,7 @@ function ConteudoVendedores() {
       .select("id, data, numero_os, orcamento_aprovado, valor_pago, tipos_servico(nome)")
       .eq("unidade_id", linha.unidade_id)
       .eq("atendente_id", linha.usuario_id)
+      .eq("linha", linha.linha)
       .gte("data", inicioMes())
       .order("data", { ascending: false });
 
@@ -284,7 +289,7 @@ function ConteudoVendedores() {
             {carregando && <tr><td className="p-4 text-muted" colSpan={abaAtual.categoria ? 5 : 4}>Carregando…</td></tr>}
             {!carregando && linhasFiltradas.length === 0 && <tr><td className="p-4 text-muted" colSpan={abaAtual.categoria ? 5 : 4}>Nenhuma venda no período{unidadeFiltro ? " para essa unidade" : ""}.</td></tr>}
             {linhasFiltradas.map((l, i) => (
-              <tr key={`${l.usuario_id}-${l.unidade_id}`} className="border-t border-line hover:bg-canvas/60 cursor-pointer" onClick={() => abrirDetalhe(l)}>
+              <tr key={`${l.usuario_id}-${l.unidade_id}-${l.linha}`} className="border-t border-line hover:bg-canvas/60 cursor-pointer" onClick={() => abrirDetalhe(l)}>
                 <td className="p-3">
                   <span className="inline-flex items-center gap-2">
                     <span className={`text-xs font-semibold w-6 ${MEDALHA[i] || "text-muted"}`}>{i + 1}º</span>
@@ -292,7 +297,12 @@ function ConteudoVendedores() {
                     {!podeVerDetalhe(l) && <Lock size={12} className="text-muted" />}
                   </span>
                 </td>
-                <td className="p-3 text-muted">{l.unidade_nome}</td>
+                <td className="p-3 text-muted">
+                  {l.unidade_nome}{" "}
+                  <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${l.linha === "ih" ? "bg-teal-soft text-teal" : "bg-canvas text-ink/60"}`}>
+                    {l.linha === "ih" ? "IH" : "CI"}
+                  </span>
+                </td>
                 <td className="p-3 text-right font-mono-num font-medium">R$ {formatarMoedaSemSimbolo(l.valor_pago)}</td>
                 {abaAtual.categoria && <td className="p-3 text-right font-mono-num text-gold">R$ {formatarMoedaSemSimbolo(l.premio)}</td>}
                 <td className="p-3 text-right font-mono-num text-muted">{l.qtd_os}</td>
@@ -315,12 +325,14 @@ function ConteudoVendedores() {
           </thead>
           <tbody>
             {linhasFiltradas.flatMap((l, i) => {
-              const chave = `${l.usuario_id}::${l.unidade_id}`;
+              const chave = `${l.usuario_id}::${l.unidade_id}::${l.linha}`;
               const detalhes = detalhesImpressao?.get(chave) || [];
               const linhaResumo = (
                 <tr key={`${chave}-resumo`} className="border-t border-line bg-canvas/60 font-semibold">
                   <td className="p-3">{i + 1}º {l.nome_completo}</td>
-                  <td className="p-3 text-muted">{l.unidade_nome}</td>
+                  <td className="p-3 text-muted">
+                    {l.unidade_nome} <span className="text-[9px]">({l.linha === "ih" ? "IH" : "CI"})</span>
+                  </td>
                   <td className="p-3 text-right font-mono-num">R$ {formatarMoedaSemSimbolo(l.valor_pago)}</td>
                   {abaAtual.categoria && <td className="p-3 text-right font-mono-num text-gold">R$ {formatarMoedaSemSimbolo(l.premio)}</td>}
                   <td className="p-3 text-right font-mono-num">{l.qtd_os}</td>

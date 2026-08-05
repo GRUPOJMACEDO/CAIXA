@@ -11,7 +11,9 @@ function Conteudo() {
   const [unidades, setUnidades] = useState([]);
   const [nome, setNome] = useState("");
   const [codigo, setCodigo] = useState("");
-  const [edicoes, setEdicoes] = useState({}); // { unidadeId: { nome, codigo } }
+  const [atendeCiNova, setAtendeCiNova] = useState(true);
+  const [atendeIhNova, setAtendeIhNova] = useState(false);
+  const [edicoes, setEdicoes] = useState({}); // { unidadeId: { nome, codigo, atende_ci, atende_ih } }
 
   async function carregar() {
     const { data } = await supabase.from("unidades").select("*").order("nome");
@@ -24,9 +26,11 @@ function Conteudo() {
 
   async function salvar(e) {
     e.preventDefault();
-    await supabase.from("unidades").insert({ nome, codigo: codigo.toUpperCase() });
+    await supabase.from("unidades").insert({ nome, codigo: codigo.toUpperCase(), atende_ci: atendeCiNova, atende_ih: atendeIhNova });
     setNome("");
     setCodigo("");
+    setAtendeCiNova(true);
+    setAtendeIhNova(false);
     carregar();
   }
 
@@ -34,7 +38,12 @@ function Conteudo() {
     const edicao = edicoes[unidade.id] || {};
     const novoNome = (edicao.nome ?? unidade.nome).trim();
     const novoCodigo = (edicao.codigo ?? unidade.codigo).toUpperCase().slice(0, 7);
-    await supabase.from("unidades").update({ nome: novoNome, codigo: novoCodigo }).eq("id", unidade.id);
+    const novoAtendeCi = edicao.atende_ci ?? unidade.atende_ci;
+    const novoAtendeIh = edicao.atende_ih ?? unidade.atende_ih;
+    await supabase
+      .from("unidades")
+      .update({ nome: novoNome, codigo: novoCodigo, atende_ci: novoAtendeCi, atende_ih: novoAtendeIh })
+      .eq("id", unidade.id);
     carregar();
   }
 
@@ -58,6 +67,14 @@ function Conteudo() {
             <label className="field-label">ASC Cod.</label>
             <input className="field-input" value={codigo} onChange={(e) => setCodigo(e.target.value)} maxLength={7} required />
           </div>
+          <div className="flex items-center gap-3 pb-2.5">
+            <label className="flex items-center gap-1.5 text-sm text-muted">
+              <input type="checkbox" checked={atendeCiNova} onChange={(e) => setAtendeCiNova(e.target.checked)} /> CI
+            </label>
+            <label className="flex items-center gap-1.5 text-sm text-muted">
+              <input type="checkbox" checked={atendeIhNova} onChange={(e) => setAtendeIhNova(e.target.checked)} /> IH
+            </label>
+          </div>
           <button className="btn-primary" type="submit">Adicionar</button>
         </form>
       )}
@@ -78,7 +95,21 @@ function Conteudo() {
               <span>{u.nome}</span>
             )}
             {permitido ? (
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-3">
+                <label className="flex items-center gap-1 text-xs text-muted">
+                  <input
+                    type="checkbox"
+                    checked={edicoes[u.id]?.atende_ci ?? u.atende_ci}
+                    onChange={(e) => setEdicoes({ ...edicoes, [u.id]: { ...edicoes[u.id], atende_ci: e.target.checked } })}
+                  /> CI
+                </label>
+                <label className="flex items-center gap-1 text-xs text-muted">
+                  <input
+                    type="checkbox"
+                    checked={edicoes[u.id]?.atende_ih ?? u.atende_ih}
+                    onChange={(e) => setEdicoes({ ...edicoes, [u.id]: { ...edicoes[u.id], atende_ih: e.target.checked } })}
+                  /> IH
+                </label>
                 <input
                   className="field-input w-24"
                   maxLength={7}
@@ -90,7 +121,11 @@ function Conteudo() {
                 </button>
               </div>
             ) : (
-              <span className="text-muted text-xs">{u.codigo}</span>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted">{u.codigo}</span>
+                {u.atende_ci && <span className="text-[10px] bg-canvas px-1.5 py-0.5 rounded text-muted">CI</span>}
+                {u.atende_ih && <span className="text-[10px] bg-teal-soft text-teal px-1.5 py-0.5 rounded">IH</span>}
+              </div>
             )}
           </div>
         ))}

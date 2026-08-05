@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { Save, ReceiptText, Store, CalendarDays, Hash, Tags, Boxes, Wrench, Wallet, CircleDollarSign, CreditCard, Layers, Landmark, StickyNote, Ticket, Pencil, Trash2, Plus, X } from "lucide-react";
+import { Save, ReceiptText, Store, CalendarDays, Hash, Tags, Boxes, Wrench, Wallet, CircleDollarSign, CreditCard, Layers, Landmark, StickyNote, Ticket, Pencil, Trash2, Plus, X, Route } from "lucide-react";
 import AppShell from "../../components/AppShell";
 import CurrencyInput from "../../components/CurrencyInput";
 import ComboBoxModelo from "../../components/ComboBoxModelo";
@@ -29,12 +29,19 @@ function Rotulo({ icone: Icone, children }) {
 }
 
 function FormularioLancamento() {
-  const { usuario, unidades } = useSessao();
+  const { usuario, unidades, modoIH } = useSessao();
   const [categorias, setCategorias] = useState([]);
   const [tiposServico, setTiposServico] = useState([]);
   const [carregandoTipos, setCarregandoTipos] = useState(false);
 
-  const unidadeUnica = unidades.length === 1;
+  // linha (CI/IH) deste lançamento: fixa pelo login, ou escolhida na tela
+  // (só gestão vê a escolha — atendente dedicado nunca decide isso)
+  const linhaFixaUsuario = usuario.linha || null;
+  const [linhaOperacao, setLinhaOperacao] = useState(linhaFixaUsuario || (modoIH ? "ih" : "ci"));
+  const precisaEscolherLinha = !linhaFixaUsuario;
+  const unidadesDaLinha = unidades.filter((u) => (linhaOperacao === "ih" ? u.atende_ih : u.atende_ci));
+
+  const unidadeUnica = unidadesDaLinha.length === 1;
   const [unidadeId, setUnidadeId] = useState("");
   const [data, setData] = useState(hoje());
   const [numeroOsDigitado, setNumeroOsDigitado] = useState("");
@@ -65,8 +72,10 @@ function FormularioLancamento() {
   const valorPagoEfetivo = usaMultiplasFormas ? totalFormas : Number(valorPago) || 0;
 
   useEffect(() => {
-    if (unidades[0] && !unidadeId) setUnidadeId(unidades[0].id);
-  }, [unidades]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (unidadesDaLinha[0] && !unidadesDaLinha.some((u) => u.id === unidadeId)) {
+      setUnidadeId(unidadesDaLinha[0].id);
+    }
+  }, [unidadesDaLinha, linhaOperacao]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!valorPago || Number(valorPago) === 0) {
@@ -132,7 +141,8 @@ function FormularioLancamento() {
         .select("orcamento_aprovado, valor_pago")
         .eq("unidade_id", unidadeId)
         .eq("numero_os", resultado.valor)
-        .eq("tipo_servico_id", tipoServicoId);
+        .eq("tipo_servico_id", tipoServicoId)
+        .eq("linha", linhaOperacao);
       if (existentes && existentes.length > 0) {
         const totalPago = existentes.reduce((s, l) => s + Number(l.valor_pago), 0);
         const jaDefinido = existentes.find((l) => Number(l.orcamento_aprovado) > 0);
@@ -152,7 +162,7 @@ function FormularioLancamento() {
       }
     }
     verificarSaldoOs();
-  }, [numeroOsDigitado, unidadeId, tipoServicoId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [numeroOsDigitado, unidadeId, tipoServicoId, linhaOperacao]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function executarSalvar() {
     setMensagem(null);
@@ -186,6 +196,7 @@ function FormularioLancamento() {
       categoria_id: categoriaId,
       modelo_id: modeloId || null,
       tipo_servico_id: tipoServicoId,
+      linha: linhaOperacao,
       orcamento_aprovado: Number(orcamento) || 0,
       valor_pago: valorPagoEfetivo,
       forma_pagamento: usaMultiplasFormas ? "MÚLTIPLAS" : (Number(valorPago) > 0 ? formaPagamento : null),
@@ -312,13 +323,38 @@ function FormularioLancamento() {
       </div>
 
       <form onSubmit={aoSubmeter} onKeyDown={aoTeclar} className="card p-6 grid grid-cols-3 gap-4">
+        {precisaEscolherLinha && (
+          <div>
+            <Rotulo icone={Route}>Linha</Rotulo>
+            <div className="flex gap-2">
+              {[
+                { valor: "ci", rotulo: "CI (balcão)" },
+                { valor: "ih", rotulo: "IH (in-home)" },
+              ].map((opcao) => (
+                <button
+                  type="button"
+                  key={opcao.valor}
+                  onClick={() => setLinhaOperacao(opcao.valor)}
+                  className={`flex-1 px-3 py-2 rounded-lg border text-sm transition ${
+                    linhaOperacao === opcao.valor
+                      ? "border-gold bg-gold-soft/60 text-gold-strong font-medium"
+                      : "border-line bg-white text-muted hover:border-gold/50"
+                  }`}
+                >
+                  {opcao.rotulo}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         <div>
           <Rotulo icone={Store}>Unidade</Rotulo>
           {unidadeUnica ? (
-            <div className="field-input bg-canvas text-ink font-medium flex items-center">{unidades[0]?.nome}</div>
+            <div className="field-input bg-canvas text-ink font-medium flex items-center">{unidadesDaLinha[0]?.nome}</div>
           ) : (
             <select className="field-input" value={unidadeId} onChange={(e) => setUnidadeId(e.target.value)}>
-              {unidades.map((u) => (
+              {unidadesDaLinha.length === 0 && <option value="">Nenhuma unidade atende essa linha</option>}
+              {unidadesDaLinha.map((u) => (
                 <option key={u.id} value={u.id}>{u.nome}</option>
               ))}
             </select>

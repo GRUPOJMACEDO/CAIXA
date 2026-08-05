@@ -16,7 +16,7 @@ function inicioMes() {
 const MEDALHA = ["text-gold", "text-prata", "text-bronze"];
 
 function ConteudoDashboard() {
-  const { unidades } = useSessao(); // unidades que EU tenho acesso (para liberar o drill-down)
+  const { unidades, linhaFiltro } = useSessao(); // unidades que EU tenho acesso (para liberar o drill-down)
   const [linhas, setLinhas] = useState([]);
   const [lancamentosDetalhe, setLancamentosDetalhe] = useState([]);
   const [carregando, setCarregando] = useState(true);
@@ -26,7 +26,9 @@ function ConteudoDashboard() {
   const idsAutorizados = new Set(unidades.map((u) => u.id));
 
   async function carregar() {
-    const { data } = await supabase.from("vw_dashboard_valores").select("*");
+    let query = supabase.from("vw_dashboard_valores").select("*");
+    if (linhaFiltro) query = query.eq("linha", linhaFiltro);
+    const { data } = await query;
     const lista = (data || []).map((u) => ({
       ...u,
       falta: Number(u.orcamento_aprovado) - Number(u.valor_pago),
@@ -37,7 +39,7 @@ function ConteudoDashboard() {
 
   useEffect(() => {
     carregar();
-  }, []);
+  }, [linhaFiltro]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const totalPago = linhas.reduce((s, l) => s + Number(l.valor_pago), 0);
   const totalOrcamento = linhas.reduce((s, l) => s + Number(l.orcamento_aprovado), 0);
@@ -53,6 +55,7 @@ function ConteudoDashboard() {
       .from("lancamentos")
       .select("id, data, numero_os, orcamento_aprovado, valor_pago, tipos_servico(nome)")
       .eq("unidade_id", unidade.unidade_id)
+      .eq("linha", unidade.linha)
       .gte("data", inicioMes())
       .order("data", { ascending: false });
     setLancamentosDetalhe(data || []);
@@ -133,7 +136,7 @@ function ConteudoDashboard() {
             {carregando && <tr><td className="p-4 text-muted" colSpan={5}>Carregando…</td></tr>}
             {ordenadas.map((l, i) => (
               <tr
-                key={l.unidade_id}
+                key={`${l.unidade_id}-${l.linha}`}
                 className="border-t border-line hover:bg-canvas/60 cursor-pointer"
                 onClick={() => abrirDetalhe(l)}
               >
@@ -141,6 +144,9 @@ function ConteudoDashboard() {
                   <span className="inline-flex items-center gap-2">
                     <span className={`text-xs font-semibold w-6 ${MEDALHA[i] || "text-muted"}`}>{i + 1}º</span>
                     {l.unidade_nome}
+                    <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${l.linha === "ih" ? "bg-teal-soft text-teal" : "bg-canvas text-muted"}`}>
+                      {l.linha === "ih" ? "IH" : "CI"}
+                    </span>
                     {!idsAutorizados.has(l.unidade_id) && <Lock size={12} className="text-muted" />}
                   </span>
                 </td>

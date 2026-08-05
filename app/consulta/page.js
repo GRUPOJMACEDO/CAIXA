@@ -33,7 +33,7 @@ function paraCSV(linhas, mostrarUnidade) {
 }
 
 function Conteudo() {
-  const { usuario, unidades } = useSessao();
+  const { usuario, unidades, linhaFiltro } = useSessao();
   const [categorias, setCategorias] = useState([]);
   const [numeroOs, setNumeroOs] = useState("");
   const [dataDe, setDataDe] = useState("");
@@ -67,12 +67,13 @@ function Conteudo() {
     let query = supabase
       .from("lancamentos")
       .select(
-        "id, data, numero_os, valor_pago, orcamento_aprovado, forma_pagamento, parcelas, bandeira, formas_pagamento, observacoes, unidade_id, categoria_id, tipo_servico_id, unidades(nome), categorias(nome), tipos_servico(nome), usuarios!atendente_id(nome_completo)"
+        "id, data, numero_os, valor_pago, orcamento_aprovado, forma_pagamento, parcelas, bandeira, formas_pagamento, observacoes, linha, unidade_id, categoria_id, tipo_servico_id, unidades(nome), categorias(nome), tipos_servico(nome), usuarios!atendente_id(nome_completo)"
       )
       .in("unidade_id", unidadeId ? [unidadeId] : unidades.map((u) => u.id))
       .order("data", { ascending: false })
       .limit(300);
 
+    if (linhaFiltro) query = query.eq("linha", linhaFiltro);
     if (numeroOs.trim()) query = query.ilike("numero_os", `%${numeroOs.trim().toUpperCase()}%`);
     if (dataDe) query = query.gte("data", dataDe);
     if (dataAte) query = query.lte("data", dataAte);
@@ -350,7 +351,12 @@ function Conteudo() {
                             {r.categorias?.nome || "—"}
                           </span>
                         </td>
-                        <td className="p-3">{r.tipos_servico?.nome}</td>
+                        <td className="p-3">
+                          {r.tipos_servico?.nome}{" "}
+                          <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${r.linha === "ih" ? "bg-teal-soft text-teal" : "bg-canvas text-ink/60"}`}>
+                            {r.linha === "ih" ? "IH" : "CI"}
+                          </span>
+                        </td>
                         <td className="p-3 text-right font-mono-num">R$ {formatarMoedaSemSimbolo(r.orcamento_aprovado)}</td>
                         <td className="p-3 text-right font-mono-num font-medium">R$ {formatarMoedaSemSimbolo(r.valor_pago)}</td>
                         <td className="p-3 text-right">

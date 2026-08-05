@@ -22,7 +22,7 @@ function horasDesde(dataISO) {
 }
 
 function ConteudoContasAReceber() {
-  const { usuario, unidades } = useSessao();
+  const { usuario, unidades, linhaFiltro } = useSessao();
   const [linhas, setLinhas] = useState([]);
   const [filtroUnidade, setFiltroUnidade] = useState("");
   const [selecionada, setSelecionada] = useState(null);
@@ -42,18 +42,20 @@ function ConteudoContasAReceber() {
 
   async function carregar() {
     if (unidades.length === 0) return [];
-    const { data } = await supabase
+    let query = supabase
       .from("vw_contas_a_receber")
       .select("*")
       .in("unidade_id", unidades.map((u) => u.id))
       .order("falta_pagar", { ascending: false });
+    if (linhaFiltro) query = query.eq("linha", linhaFiltro);
+    const { data } = await query;
     setLinhas(data || []);
     return data || [];
   }
 
   useEffect(() => {
     carregar();
-  }, [unidades]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [unidades, linhaFiltro]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // lembretes: OS com mais de 24h em aberto — abre automaticamente 1x por dia
   const lembretes = linhas.filter((l) => horasDesde(l.ultimo_lancamento) >= 24);
@@ -72,7 +74,7 @@ function ConteudoContasAReceber() {
   const totalFalta = linhasFiltradas.reduce((s, l) => s + Number(l.falta_pagar), 0);
   const percentualFalta = totalOrcamento ? (totalFalta / totalOrcamento) * 100 : 0;
 
-  async function carregarHistorico(unidadeId, numeroOs, tipoServicoId) {
+  async function carregarHistorico(unidadeId, numeroOs, tipoServicoId, linhaCiIh) {
     setCarregandoHistorico(true);
     const { data } = await supabase
       .from("lancamentos")
@@ -80,6 +82,7 @@ function ConteudoContasAReceber() {
       .eq("unidade_id", unidadeId)
       .eq("numero_os", numeroOs)
       .eq("tipo_servico_id", tipoServicoId)
+      .eq("linha", linhaCiIh)
       .order("criado_em", { ascending: true });
     setHistorico(data || []);
     setCarregandoHistorico(false);
@@ -91,7 +94,7 @@ function ConteudoContasAReceber() {
     setFormaPagamento("");
     setFormasPagamentoPopup([]);
     setLinhaEditandoPopup(null);
-    carregarHistorico(linha.unidade_id, linha.numero_os, linha.tipo_servico_id);
+    carregarHistorico(linha.unidade_id, linha.numero_os, linha.tipo_servico_id, linha.linha);
   }
 
   function fecharPopup() {
@@ -131,6 +134,7 @@ function ConteudoContasAReceber() {
       categoria_id: selecionada.categoria_id,
       modelo_id: selecionada.modelo_id,
       tipo_servico_id: selecionada.tipo_servico_id,
+      linha: selecionada.linha,
       orcamento_aprovado: Number(selecionada.orcamento_aprovado),
       valor_pago: valorEfetivo,
       forma_pagamento: usaMultiplas ? "MÚLTIPLAS" : formaPagamento,
@@ -146,7 +150,11 @@ function ConteudoContasAReceber() {
 
     const dadosAtualizados = await carregar();
     const atualizada = dadosAtualizados.find(
-      (l) => l.unidade_id === selecionada.unidade_id && l.numero_os === selecionada.numero_os && l.tipo_servico_id === selecionada.tipo_servico_id
+      (l) =>
+        l.unidade_id === selecionada.unidade_id &&
+        l.numero_os === selecionada.numero_os &&
+        l.tipo_servico_id === selecionada.tipo_servico_id &&
+        l.linha === selecionada.linha
     );
     if (atualizada) {
       // ainda sobrou saldo — mantém o pop-up aberto, pronto para o próximo lançamento
@@ -154,7 +162,7 @@ function ConteudoContasAReceber() {
       setValorAgora(Number(atualizada.falta_pagar));
       setFormaPagamento("");
       setFormasPagamentoPopup([]);
-      await carregarHistorico(atualizada.unidade_id, atualizada.numero_os, atualizada.tipo_servico_id);
+      await carregarHistorico(atualizada.unidade_id, atualizada.numero_os, atualizada.tipo_servico_id, atualizada.linha);
     } else {
       // saldo zerado — a OS some da lista de contas a receber, fecha o pop-up
       fecharPopup();
@@ -288,13 +296,18 @@ function ConteudoContasAReceber() {
             )}
             {linhasFiltradas.map((l) => (
               <tr
-                key={`${l.unidade_id}-${l.numero_os}-${l.tipo_servico_id}`}
+                key={`${l.unidade_id}-${l.numero_os}-${l.tipo_servico_id}-${l.linha}`}
                 className="border-t border-line hover:bg-canvas/60 cursor-pointer"
                 onClick={() => abrirPopup(l)}
               >
                 {mostrarUnidade && <td className="p-3">{unidadesMap[l.unidade_id]}</td>}
                 <td className="p-3 font-mono-num">{l.numero_os}</td>
-                <td className="p-3 text-xs text-muted">{l.tipo_servico_nome || "—"}</td>
+                <td className="p-3 text-xs text-muted">
+                  {l.tipo_servico_nome || "—"}{" "}
+                  <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${l.linha === "ih" ? "bg-teal-soft text-teal" : "bg-canvas text-ink/60"}`}>
+                    {l.linha === "ih" ? "IH" : "CI"}
+                  </span>
+                </td>
                 <td className="p-3 text-right font-mono-num">R$ {formatarMoedaSemSimbolo(l.orcamento_aprovado)}</td>
                 <td className="p-3 text-right font-mono-num font-bold text-[#2E6B45] bg-[#3F8A5C]/5">R$ {formatarMoedaSemSimbolo(l.total_pago)}</td>
                 <td className="p-3 text-right font-mono-num font-medium text-bronze">R$ {formatarMoedaSemSimbolo(l.falta_pagar)}</td>
@@ -465,7 +478,7 @@ function ConteudoContasAReceber() {
           ) : (
             <div className="space-y-3">
               {lembretes.map((l) => (
-                <div key={`${l.unidade_id}-${l.numero_os}-${l.tipo_servico_id}`} className="rounded-lg border border-line p-3 text-sm">
+                <div key={`${l.unidade_id}-${l.numero_os}-${l.tipo_servico_id}-${l.linha}`} className="rounded-lg border border-line p-3 text-sm">
                   <p className="text-ink">
                     A OS <span className="font-mono-num font-medium">{l.numero_os}</span>
                     {l.tipo_servico_nome && <> ({l.tipo_servico_nome})</>}

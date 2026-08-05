@@ -15,10 +15,11 @@ function inicioMes() {
 }
 
 function paraCSV(linhas) {
-  const cabecalho = ["Data", "Unidade", "Nº OS", "Categoria", "Modelo", "Tipo de Serviço", "Orçamento Aprovado", "Valor Pago", "Forma de Pagamento", "Parcelas", "Bandeira", "Atendente"];
+  const cabecalho = ["Data", "Unidade", "Linha", "Nº OS", "Categoria", "Modelo", "Tipo de Serviço", "Orçamento Aprovado", "Valor Pago", "Forma de Pagamento", "Parcelas", "Bandeira", "Atendente"];
   const corpo = linhas.map((l) => [
     formatarDataBR(l.data),
     l.unidades?.nome || "",
+    l.linha === "ih" ? "IH" : "CI",
     l.numero_os,
     l.categorias?.nome || "",
     l.modelos?.nome || "",
@@ -35,7 +36,7 @@ function paraCSV(linhas) {
 }
 
 function Conteudo() {
-  const { usuario, unidades } = useSessao();
+  const { usuario, unidades, linhaFiltro } = useSessao();
   const [dataDe, setDataDe] = useState(inicioMes());
   const [dataAte, setDataAte] = useState(new Date().toISOString().slice(0, 10));
   const [unidadesSelecionadas, setUnidadesSelecionadas] = useState([]);
@@ -53,16 +54,18 @@ function Conteudo() {
 
   async function buscar() {
     setBuscando(true);
-    const { data } = await supabase
+    let query = supabase
       .from("lancamentos")
       .select(
-        "id, data, numero_os, orcamento_aprovado, valor_pago, forma_pagamento, parcelas, bandeira, unidades(nome), categorias(nome), modelos(nome), tipos_servico(nome), atendente:usuarios!atendente_id(nome_completo)"
+        "id, data, numero_os, orcamento_aprovado, valor_pago, forma_pagamento, parcelas, bandeira, linha, unidades(nome), categorias(nome), modelos(nome), tipos_servico(nome), atendente:usuarios!atendente_id(nome_completo)"
       )
       .in("unidade_id", unidadesSelecionadas)
       .gte("data", dataDe)
       .lte("data", dataAte)
       .order("data", { ascending: false })
       .limit(5000);
+    if (linhaFiltro) query = query.eq("linha", linhaFiltro);
+    const { data } = await query;
     setResultados(data || []);
     setBuscando(false);
   }
@@ -160,6 +163,9 @@ function Conteudo() {
                         <span className="inline-flex items-center gap-1.5">
                           <Icone size={13} className="text-muted shrink-0" />
                           {r.tipos_servico?.nome}
+                          <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium shrink-0 ${r.linha === "ih" ? "bg-teal-soft text-teal" : "bg-canvas text-ink/60"}`}>
+                            {r.linha === "ih" ? "IH" : "CI"}
+                          </span>
                         </span>
                       </td>
                       <td className="p-3 text-right font-mono-num whitespace-nowrap">R$ {formatarMoedaSemSimbolo(r.orcamento_aprovado)}</td>

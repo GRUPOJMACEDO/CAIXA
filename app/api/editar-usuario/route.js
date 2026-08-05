@@ -21,7 +21,7 @@ export async function POST(request) {
       return NextResponse.json({ erro: "Sem permissão para editar usuários." }, { status: 403 });
     }
 
-    const { usuarioId, nome, sobrenome, cargo, unidadeIds } = await request.json();
+    const { usuarioId, nome, sobrenome, cargo, unidadeIds, linha } = await request.json();
     const login = gerarLogin(nome, sobrenome);
     const email = `${login}@jmacedo.internal`;
 
@@ -30,7 +30,7 @@ export async function POST(request) {
 
     const { error: erroPerfil } = await admin
       .from("usuarios")
-      .update({ nome_completo: `${nome} ${sobrenome}`.toUpperCase(), login, cargo })
+      .update({ nome_completo: `${nome} ${sobrenome}`.toUpperCase(), login, cargo, linha: linha || null })
       .eq("id", usuarioId);
     if (erroPerfil) return NextResponse.json({ erro: erroPerfil.message }, { status: 400 });
 

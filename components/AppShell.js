@@ -31,6 +31,7 @@ import {
 } from "lucide-react";
 import BotaoModoClaroEscuro from "./BotaoModoClaroEscuro";
 import SinoSolicitacoesSenha from "./SinoSolicitacoesSenha";
+import BotaoLinhaToggle from "./BotaoLinhaToggle";
 import { SessaoProvider, useSessao } from "../lib/SessaoContext";
 import {
   rotuloCargo,
@@ -137,7 +138,7 @@ function secaoDaRota(pathname) {
 function Shell({ children }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { usuario, sair } = useSessao();
+  const { usuario, unidades, sair } = useSessao();
   const [recolhido, setRecolhido] = useState(false); // painel lateral sempre visível por padrão
   const [secaoAberta, setSecaoAberta] = useState(null);
   const ignorarProximaAutoAbertura = useRef(false);
@@ -226,6 +227,18 @@ function Shell({ children }) {
               <Tv size={16} strokeWidth={2} className="shrink-0" />
               {!recolhido && "Abrir painel de TV"}
             </a>
+            {unidades.some((u) => u.atende_ih) && (
+              <a
+                href="/painel/ih"
+                target="_blank"
+                rel="noopener noreferrer"
+                title={recolhido ? "Abrir painel de TV — IH" : undefined}
+                className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-muted hover:bg-ink/5 hover:text-ink transition ${recolhido ? "justify-center" : ""}`}
+              >
+                <Tv size={16} strokeWidth={2} className="shrink-0 text-teal" />
+                {!recolhido && "Painel de TV — IH"}
+              </a>
+            )}
           </div>
         </nav>
 
@@ -258,6 +271,7 @@ function Shell({ children }) {
             <p className="text-sm font-medium text-ink">{tituloAtual}</p>
           </div>
           <div className="flex items-center gap-4">
+            <BotaoLinhaToggle />
             <div className="text-right">
               <p className="text-sm font-medium text-ink leading-tight">{usuario.nome_completo}</p>
               <p className="text-xs text-muted leading-tight">{rotuloCargo(usuario.cargo)}</p>

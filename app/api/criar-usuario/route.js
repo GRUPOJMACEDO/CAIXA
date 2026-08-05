@@ -23,7 +23,7 @@ export async function POST(request) {
       return NextResponse.json({ erro: "Sem permissão para criar usuários." }, { status: 403 });
     }
 
-    const { nome, sobrenome, cargo, unidadeIds } = await request.json();
+    const { nome, sobrenome, cargo, unidadeIds, linha } = await request.json();
     const login = gerarLogin(nome, sobrenome);
     const email = `${login}@jmacedo.internal`;
 
@@ -40,6 +40,7 @@ export async function POST(request) {
       nome_completo: `${nome} ${sobrenome}`.toUpperCase(),
       login,
       cargo,
+      linha: linha || null,
     });
     if (erroPerfil) return NextResponse.json({ erro: erroPerfil.message }, { status: 400 });
 

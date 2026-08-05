@@ -4,6 +4,7 @@ import { Target } from "lucide-react";
 import AppShell from "../../../components/AppShell";
 import BotaoAtualizar from "../../../components/BotaoAtualizar";
 import { supabase } from "../../../lib/supabaseClient";
+import { useSessao } from "../../../lib/SessaoContext";
 
 const MEDALHAS = [
   { cor: "border-gold bg-gold-soft/50", texto: "text-gold-strong", rotulo: "1º lugar · ouro", barra: "#B8862E" },
@@ -38,19 +39,21 @@ function BandeiraQuadriculada({ size = 14 }) {
 }
 
 function ConteudoMetas() {
+  const { linhaFiltro } = useSessao();
   const [unidadesRanking, setUnidadesRanking] = useState([]);
   const [carregando, setCarregando] = useState(true);
 
   async function carregar() {
     setCarregando(true);
-    const { data } = await supabase.from("vw_painel_tv").select("*");
+    const view = linhaFiltro === "ih" ? "vw_painel_tv_ih" : "vw_painel_tv";
+    const { data } = await supabase.from(view).select("*");
     setUnidadesRanking(data || []);
     setCarregando(false);
   }
 
   useEffect(() => {
     carregar();
-  }, []);
+  }, [linhaFiltro]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const comMeta = unidadesRanking.map((u) => ({
     ...u,

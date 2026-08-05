@@ -27,6 +27,7 @@ function Conteudo() {
   const [sobrenome, setSobrenome] = useState("");
   const [cargo, setCargo] = useState(CARGOS.OPERACIONAL);
   const [unidadeIds, setUnidadeIds] = useState([]);
+  const [linha, setLinha] = useState("");
   const [usuarioCriado, setUsuarioCriado] = useState(null); // { login, senha }
   const [copiado, setCopiado] = useState(false);
   const [usuarioEditando, setUsuarioEditando] = useState(null);
@@ -34,6 +35,7 @@ function Conteudo() {
   const [edSobrenome, setEdSobrenome] = useState("");
   const [edCargo, setEdCargo] = useState(CARGOS.OPERACIONAL);
   const [edUnidadeIds, setEdUnidadeIds] = useState([]);
+  const [edLinha, setEdLinha] = useState("");
   const [salvandoEdicao, setSalvandoEdicao] = useState(false);
 
   const edAcessoTodas = podeVerTodasUnidades(edCargo);
@@ -74,7 +76,7 @@ function Conteudo() {
     const resposta = await fetch("/api/criar-usuario", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${sessao.session.access_token}` },
-      body: JSON.stringify({ nome, sobrenome, cargo, unidadeIds: acessoTodas ? [] : unidadeIds }),
+      body: JSON.stringify({ nome, sobrenome, cargo, unidadeIds: acessoTodas ? [] : unidadeIds, linha: linha || null }),
     });
     const resultado = await resposta.json();
     if (!resposta.ok) {
@@ -85,6 +87,7 @@ function Conteudo() {
     setNome("");
     setSobrenome("");
     setUnidadeIds([]);
+    setLinha("");
     carregar();
   }
 
@@ -93,6 +96,7 @@ function Conteudo() {
     setEdNome(partes[0] || "");
     setEdSobrenome(partes.slice(1).join(" ") || "");
     setEdCargo(usuarioAlvo.cargo);
+    setEdLinha(usuarioAlvo.linha || "");
     const { data: vinculos } = await supabase.from("usuario_unidades").select("unidade_id").eq("usuario_id", usuarioAlvo.id);
     setEdUnidadeIds((vinculos || []).map((v) => v.unidade_id));
     setUsuarioEditando(usuarioAlvo);
@@ -119,6 +123,7 @@ function Conteudo() {
         sobrenome: edSobrenome,
         cargo: edCargo,
         unidadeIds: edAcessoTodas ? [] : edUnidadeIds,
+        linha: edLinha || null,
       }),
     });
     const resultado = await resposta.json();
@@ -214,6 +219,14 @@ function Conteudo() {
               ))}
             </select>
           </div>
+          <div>
+            <label className="field-label">Linha fixa (opcional)</label>
+            <select className="field-input" value={linha} onChange={(e) => setLinha(e.target.value)}>
+              <option value="">— Nenhuma (gestão, vê CI e IH) —</option>
+              <option value="ci">CI (balcão)</option>
+              <option value="ih">IH (in-home)</option>
+            </select>
+          </div>
         </div>
 
         {nome && sobrenome && (
@@ -276,6 +289,11 @@ function Conteudo() {
             </span>
             <div className="flex items-center gap-3">
               <span className="text-xs text-gold font-medium">{rotuloCargo(u.cargo)}</span>
+              {u.linha && (
+                <span className={`text-[10px] px-1.5 py-0.5 rounded ${u.linha === "ih" ? "bg-teal-soft text-teal" : "bg-canvas text-muted"}`}>
+                  {u.linha === "ih" ? "IH" : "CI"}
+                </span>
+              )}
               {podeEditarUsuario && (
                 <button className="text-muted hover:text-gold transition p-1.5" title="Editar" onClick={() => abrirEdicao(u)}>
                   <Pencil size={15} />
@@ -352,6 +370,15 @@ function Conteudo() {
                 {Object.values(CARGOS).map((c) => (
                   <option key={c} value={c}>{CARGO_LABELS[c]}</option>
                 ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="field-label">Linha fixa (opcional)</label>
+              <select className="field-input" value={edLinha} onChange={(e) => setEdLinha(e.target.value)}>
+                <option value="">— Nenhuma (gestão, vê CI e IH) —</option>
+                <option value="ci">CI (balcão)</option>
+                <option value="ih">IH (in-home)</option>
               </select>
             </div>
 

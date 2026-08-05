@@ -25,8 +25,15 @@ function rotuloMes(iso) {
 function Conteudo() {
   const { usuario, unidades } = useSessao();
   const meses = proximosMeses(3); // mês atual + 2 seguintes, sempre rolando
-  const [metas, setMetas] = useState({}); // { unidadeId: { mesIso: valor } }
+  const [metas, setMetas] = useState({}); // { unidadeId: { mesIso: { linha: valor } } }
   const [salvo, setSalvo] = useState({});
+
+  // uma linha da tabela por (unidade, linha) — unidade que atende as duas
+  // linhas (CI e IH) aparece 2x, cada uma com meta própria
+  const linhasTabela = unidades.flatMap((u) => {
+    const linhasDaUnidade = u.atende_ih ? ["ci", "ih"] : ["ci"];
+    return linhasDaUnidade.map((linha) => ({ unidade: u, linha }));
+  });
 
   useEffect(() => {
     supabase
@@ -38,32 +45,37 @@ function Conteudo() {
         const mapa = {};
         (data || []).forEach((m) => {
           mapa[m.unidade_id] = mapa[m.unidade_id] || {};
-          mapa[m.unidade_id][m.mes_referencia] = m.valor_meta;
+          mapa[m.unidade_id][m.mes_referencia] = mapa[m.unidade_id][m.mes_referencia] || {};
+          mapa[m.unidade_id][m.mes_referencia][m.linha] = m.valor_meta;
         });
         setMetas(mapa);
       });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  function setValor(unidadeId, mesIso, valor) {
+  function setValor(unidadeId, mesIso, linha, valor) {
     setMetas((atual) => ({
       ...atual,
-      [unidadeId]: { ...(atual[unidadeId] || {}), [mesIso]: valor },
+      [unidadeId]: {
+        ...(atual[unidadeId] || {}),
+        [mesIso]: { ...(atual[unidadeId]?.[mesIso] || {}), [linha]: valor },
+      },
     }));
   }
 
-  async function salvar(unidadeId, mesIso) {
-    const valor = Number(metas[unidadeId]?.[mesIso] || 0);
+  async function salvar(unidadeId, mesIso, linha) {
+    const valor = Number(metas[unidadeId]?.[mesIso]?.[linha] || 0);
     await supabase.from("metas").upsert(
       {
         unidade_id: unidadeId,
         mes_referencia: mesIso,
+        linha,
         valor_meta: valor,
         atualizado_por: usuario.id,
         atualizado_em: new Date().toISOString(),
       },
-      { onConflict: "unidade_id,mes_referencia" }
+      { onConflict: "unidade_id,mes_referencia,linha" }
     );
-    const chave = `${unidadeId}-${mesIso}`;
+    const chave = `${unidadeId}-${mesIso}-${linha}`;
     setSalvo((s) => ({ ...s, [chave]: true }));
     setTimeout(() => setSalvo((s) => ({ ...s, [chave]: false })), 1500);
   }
@@ -91,22 +103,29 @@ function Conteudo() {
             </tr>
           </thead>
           <tbody>
-            {unidades.map((u) => (
-              <tr key={u.id} className="border-t border-line">
-                <td className="p-3">{u.nome}</td>
+            {linhasTabela.map(({ unidade: u, linha }) => (
+              <tr key={`${u.id}-${linha}`} className="border-t border-line">
+                <td className="p-3">
+                  {u.nome}{" "}
+                  {u.atende_ih && (
+                    <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${linha === "ih" ? "bg-teal-soft text-teal" : "bg-canvas text-muted"}`}>
+                      {linha === "ih" ? "IH" : "CI"}
+                    </span>
+                  )}
+                </td>
                 {meses.map((m) => {
-                  const chave = `${u.id}-${m}`;
+                  const chave = `${u.id}-${m}-${linha}`;
                   return (
                     <td key={m} className="p-3">
                       <div className="flex items-center gap-1.5">
                         <CurrencyInput
-                          valor={metas[u.id]?.[m] ?? ""}
-                          onChange={(v) => setValor(u.id, m, v)}
+                          valor={metas[u.id]?.[m]?.[linha] ?? ""}
+                          onChange={(v) => setValor(u.id, m, linha, v)}
                           disabled={!podeEditar}
                           className="w-44"
                         />
                         {podeEditar && (
-                          <button className="btn text-xs px-2 py-1" onClick={() => salvar(u.id, m)}>
+                          <button className="btn text-xs px-2 py-1" onClick={() => salvar(u.id, m, linha)}>
                             {salvo[chave] ? "✓" : "OK"}
                           </button>
                         )}
