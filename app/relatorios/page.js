@@ -164,9 +164,11 @@ function Conteudo() {
                         <span className="inline-flex items-center gap-1.5">
                           <Icone size={13} className="text-muted shrink-0" />
                           {r.tipos_servico?.nome}
-                          <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium shrink-0 ${r.linha === "ih" ? "bg-teal-soft text-teal" : "bg-canvas text-ink/60"}`}>
-                            {r.linha === "ih" ? "IH" : "CI"}
-                          </span>
+                          {r.linha === "ih" && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded font-medium shrink-0 bg-teal-soft text-teal">
+                      IH
+                    </span>
+                  )}
                         </span>
                       </td>
                       <td className="p-3 text-right font-mono-num whitespace-nowrap">R$ {formatarMoedaSemSimbolo(r.orcamento_aprovado)}</td>

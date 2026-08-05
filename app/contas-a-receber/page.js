@@ -305,9 +305,11 @@ function ConteudoContasAReceber() {
                 <td className="p-3 font-mono-num">{l.numero_os}</td>
                 <td className="p-3 text-xs text-muted">
                   {l.tipo_servico_nome || "—"}{" "}
-                  <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${l.linha === "ih" ? "bg-teal-soft text-teal" : "bg-canvas text-ink/60"}`}>
-                    {l.linha === "ih" ? "IH" : "CI"}
-                  </span>
+                  {l.linha === "ih" && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded font-medium bg-teal-soft text-teal">
+                      IH
+                    </span>
+                  )}
                 </td>
                 <td className="p-3 text-right font-mono-num">R$ {formatarMoedaSemSimbolo(l.orcamento_aprovado)}</td>
                 <td className="p-3 text-right font-mono-num font-bold text-[#2E6B45] bg-[#3F8A5C]/5">R$ {formatarMoedaSemSimbolo(l.total_pago)}</td>

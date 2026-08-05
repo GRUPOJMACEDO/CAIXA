@@ -32,6 +32,7 @@ import {
 import BotaoModoClaroEscuro from "./BotaoModoClaroEscuro";
 import SinoSolicitacoesSenha from "./SinoSolicitacoesSenha";
 import BotaoLinhaToggle from "./BotaoLinhaToggle";
+import BotaoMural from "./BotaoMural";
 import { SessaoProvider, useSessao } from "../lib/SessaoContext";
 import {
   rotuloCargo,
@@ -138,7 +139,7 @@ function secaoDaRota(pathname) {
 function Shell({ children }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { usuario, unidades, sair } = useSessao();
+  const { usuario, unidades, sair, podeAlternarLinha } = useSessao();
   const [recolhido, setRecolhido] = useState(false); // painel lateral sempre visível por padrão
   const [secaoAberta, setSecaoAberta] = useState(null);
   const ignorarProximaAutoAbertura = useRef(false);
@@ -227,7 +228,7 @@ function Shell({ children }) {
               <Tv size={16} strokeWidth={2} className="shrink-0" />
               {!recolhido && "Abrir painel de TV"}
             </a>
-            {unidades.some((u) => u.atende_ih) && (
+            {(usuario.linha === "ih" || podeAlternarLinha) && (
               <a
                 href="/painel/ih"
                 target="_blank"
@@ -272,6 +273,7 @@ function Shell({ children }) {
           </div>
           <div className="flex items-center gap-4">
             <BotaoLinhaToggle />
+            <BotaoMural />
             <div className="text-right">
               <p className="text-sm font-medium text-ink leading-tight">{usuario.nome_completo}</p>
               <p className="text-xs text-muted leading-tight">{rotuloCargo(usuario.cargo)}</p>

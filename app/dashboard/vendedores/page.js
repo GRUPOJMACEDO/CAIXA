@@ -299,9 +299,11 @@ function ConteudoVendedores() {
                 </td>
                 <td className="p-3 text-muted">
                   {l.unidade_nome}{" "}
-                  <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${l.linha === "ih" ? "bg-teal-soft text-teal" : "bg-canvas text-ink/60"}`}>
-                    {l.linha === "ih" ? "IH" : "CI"}
-                  </span>
+                  {l.linha === "ih" && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded font-medium bg-teal-soft text-teal">
+                      IH
+                    </span>
+                  )}
                 </td>
                 <td className="p-3 text-right font-mono-num font-medium">R$ {formatarMoedaSemSimbolo(l.valor_pago)}</td>
                 {abaAtual.categoria && <td className="p-3 text-right font-mono-num text-gold">R$ {formatarMoedaSemSimbolo(l.premio)}</td>}

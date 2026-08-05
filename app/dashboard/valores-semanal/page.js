@@ -182,9 +182,11 @@ function ConteudoDashboard() {
                   <span className="inline-flex items-center gap-2">
                     <span className={`text-xs font-semibold w-6 ${MEDALHA[i] || "text-muted"}`}>{i + 1}º</span>
                     {l.unidade_nome}
-                    <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${l.linha === "ih" ? "bg-teal-soft text-teal" : "bg-canvas text-muted"}`}>
-                      {l.linha === "ih" ? "IH" : "CI"}
+                    {l.linha === "ih" && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded font-medium bg-teal-soft text-teal">
+                      IH
                     </span>
+                  )}
                     {!idsAutorizados.has(l.unidade_id) && <Lock size={12} className="text-muted" />}
                   </span>
                 </td>

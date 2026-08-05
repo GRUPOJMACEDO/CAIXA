@@ -103,6 +103,7 @@ export default function PainelTV() {
 
   const top3 = ordenadas.slice(0, 3);
   const resto = ordenadas.slice(3);
+  const usarCardsGrandes = !ehAcessorios && ordenadas.length <= 6;
 
   return (
     <div data-theme="claro" className="h-screen overflow-hidden bg-canvas text-ink px-[2vw] py-[2vh] font-body flex flex-col">
@@ -136,52 +137,108 @@ export default function PainelTV() {
         <div className="h-full bg-gold transition-[width]" style={{ width: `${progresso}%` }} />
       </div>
 
-      <div className="grid grid-cols-3 gap-[1.2vh] mb-[2vh] shrink-0">
-        {top3.map((item, i) => (
-          <div key={ehAcessorios ? `${item.usuario_id}-${item.unidade_id}` : item.unidade_id} className={`rounded-xl2 border-2 px-[2vh] py-[1.6vh] ${MEDALHAS[i]?.cor}`}>
-            <p className={`text-[1.5vh] mb-[0.4vh] font-medium ${MEDALHAS[i]?.texto}`}>{MEDALHAS[i]?.rotulo}</p>
-            <p className="font-display text-[2.2vh] font-semibold mb-[0.2vh] leading-tight">{ehAcessorios ? item.nome_completo : item.unidade_nome}</p>
-            {ehAcessorios && <p className="text-[1.5vh] text-muted mb-[0.4vh]">{item.unidade_nome}</p>}
-
-            {ehMeta ? (
-              item.percentual === null ? (
-                <>
-                  <p className="font-display text-[2.4vh] font-semibold leading-none text-muted">— %</p>
-                  <p className="text-[1.4vh] text-muted mt-[0.8vh]">Meta não definida</p>
-                </>
-              ) : (
-                <>
-                  <p className="font-mono-num text-[4vh] font-semibold leading-none">{item.percentual.toFixed(0)}%</p>
-                  <div className="h-[0.9vh] bg-line rounded-full overflow-hidden mt-[0.8vh]">
-                    <div
-                      className="h-full rounded-full transition-[width]"
-                      style={{ width: `${Math.min(100, item.percentual)}%`, background: MEDALHAS[i]?.barra }}
-                    />
-                  </div>
-                  <p className="text-[1.4vh] text-muted mt-[0.6vh] font-mono-num">Meta: R$ {moedaCompacta(item.meta_mes)}</p>
-                </>
-              )
-            ) : (
-              <>
-                <p className="font-mono-num text-[4vh] font-semibold leading-none">R$ {moeda(ehAcessorios ? item.total_vendido : item[periodo.chave])}</p>
-                {ehAcessorios ? (
-                  <p className="text-[1.4vh] text-muted mt-[0.6vh] font-mono-num">Prêmio 5%: R$ {moeda(item.premio)}</p>
-                ) : (
-                  periodo.chave === "total_mes" && item.meta_mes > 0 && (
-                    <p className="text-[1.4vh] text-muted mt-[0.6vh] font-mono-num">{((item.total_mes / item.meta_mes) * 100).toFixed(0)}% da meta</p>
-                  )
-                )}
-              </>
-            )}
-          </div>
-        ))}
-      </div>
-
       {ordenadas.length === 0 ? (
         <div className="rounded-xl2 border border-line bg-white p-8 text-center text-muted flex-1 flex items-center justify-center">
           Sem dados neste período.
         </div>
-      ) : ehMeta ? (
+      ) : usarCardsGrandes ? (
+        // --- Telas por unidade (Dia/Semana/Mês/Meta), poucas unidades IH:
+        // um card grande por unidade, empilhado por classificação, com
+        // espaço reservado até 6 — se aparecer a 5ª/6ª unidade IH, o
+        // painel já acomoda sozinho, sem precisar mexer em nada.
+        <div className="flex-1 min-h-0 flex flex-col gap-[1.1vh]">
+          {ordenadas.map((item, i) => {
+            const medalha = MEDALHAS[i];
+            const corBarra = medalha?.barra || CORES_UNIDADE[i % CORES_UNIDADE.length];
+            const semMeta = ehMeta && item.percentual === null;
+            return (
+              <div
+                key={item.unidade_id}
+                className={`flex-1 rounded-xl2 border-2 px-[2.4vh] flex items-center gap-[2vh] ${medalha?.cor || "border-line bg-white"}`}
+              >
+                <span className={`font-display text-[3vh] font-bold w-[6vh] text-center shrink-0 ${medalha?.texto || "text-muted"}`}>
+                  {i + 1}º
+                </span>
+
+                <div className="flex-1 min-w-0">
+                  <p className="font-display text-[2.4vh] font-semibold leading-tight truncate">{item.unidade_nome}</p>
+                  {ehMeta ? (
+                    semMeta ? (
+                      <p className="text-[1.5vh] text-muted mt-[0.3vh]">Meta não definida</p>
+                    ) : (
+                      <div className="flex items-center gap-[1.2vh] mt-[0.6vh]">
+                        <div className="flex-1 h-[1.1vh] bg-line rounded-full overflow-hidden max-w-[40vh]">
+                          <div className="h-full rounded-full transition-[width]" style={{ width: `${Math.min(100, item.percentual)}%`, background: corBarra }} />
+                        </div>
+                        <span className="text-[1.5vh] text-muted font-mono-num shrink-0">Meta: R$ {moedaCompacta(item.meta_mes)}</span>
+                      </div>
+                    )
+                  ) : (
+                    periodo.chave === "total_mes" && item.meta_mes > 0 && (
+                      <p className="text-[1.5vh] text-muted mt-[0.3vh] font-mono-num">{((item.total_mes / item.meta_mes) * 100).toFixed(0)}% da meta do mês</p>
+                    )
+                  )}
+                </div>
+
+                <div className="text-right shrink-0">
+                  {ehMeta ? (
+                    semMeta ? (
+                      <p className="font-display text-[3.2vh] font-semibold leading-none text-muted">— %</p>
+                    ) : (
+                      <p className="font-mono-num text-[4.4vh] font-bold leading-none">{item.percentual.toFixed(0)}%</p>
+                    )
+                  ) : (
+                    <p className="font-mono-num text-[4.4vh] font-bold leading-none">R$ {moeda(item[periodo.chave])}</p>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-3 gap-[1.2vh] mb-[2vh] shrink-0">
+            {top3.map((item, i) => (
+              <div key={ehAcessorios ? `${item.usuario_id}-${item.unidade_id}` : item.unidade_id} className={`rounded-xl2 border-2 px-[2vh] py-[1.6vh] ${MEDALHAS[i]?.cor}`}>
+                <p className={`text-[1.5vh] mb-[0.4vh] font-medium ${MEDALHAS[i]?.texto}`}>{MEDALHAS[i]?.rotulo}</p>
+                <p className="font-display text-[2.2vh] font-semibold mb-[0.2vh] leading-tight">{ehAcessorios ? item.nome_completo : item.unidade_nome}</p>
+                {ehAcessorios && <p className="text-[1.5vh] text-muted mb-[0.4vh]">{item.unidade_nome}</p>}
+
+                {ehMeta ? (
+                  item.percentual === null ? (
+                    <>
+                      <p className="font-display text-[2.4vh] font-semibold leading-none text-muted">— %</p>
+                      <p className="text-[1.4vh] text-muted mt-[0.8vh]">Meta não definida</p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="font-mono-num text-[4vh] font-semibold leading-none">{item.percentual.toFixed(0)}%</p>
+                      <div className="h-[0.9vh] bg-line rounded-full overflow-hidden mt-[0.8vh]">
+                        <div
+                          className="h-full rounded-full transition-[width]"
+                          style={{ width: `${Math.min(100, item.percentual)}%`, background: MEDALHAS[i]?.barra }}
+                        />
+                      </div>
+                      <p className="text-[1.4vh] text-muted mt-[0.6vh] font-mono-num">Meta: R$ {moedaCompacta(item.meta_mes)}</p>
+                    </>
+                  )
+                ) : (
+                  <>
+                    <p className="font-mono-num text-[4vh] font-semibold leading-none">R$ {moeda(ehAcessorios ? item.total_vendido : item[periodo.chave])}</p>
+                    {ehAcessorios ? (
+                      <p className="text-[1.4vh] text-muted mt-[0.6vh] font-mono-num">Prêmio 5%: R$ {moeda(item.premio)}</p>
+                    ) : (
+                      periodo.chave === "total_mes" && item.meta_mes > 0 && (
+                        <p className="text-[1.4vh] text-muted mt-[0.6vh] font-mono-num">{((item.total_mes / item.meta_mes) * 100).toFixed(0)}% da meta</p>
+                      )
+                    )}
+                  </>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {ehMeta ? (
         <div className="grid grid-cols-2 gap-[1.2vh] flex-1 min-h-0">
           {[0, 1].map((coluna) => {
             const metade = Math.ceil(resto.length / 2);
@@ -221,7 +278,7 @@ export default function PainelTV() {
             );
           })}
         </div>
-      ) : (
+          ) : (
         <div className="grid grid-cols-2 gap-[1.2vh] flex-1 min-h-0">
           {[0, 1].map((coluna) => {
             const metade = Math.ceil(resto.length / 2);
@@ -248,6 +305,8 @@ export default function PainelTV() {
             );
           })}
         </div>
+          )}
+        </>
       )}
     </div>
   );

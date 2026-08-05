@@ -354,9 +354,11 @@ function Conteudo() {
                         </td>
                         <td className="p-3">
                           {r.tipos_servico?.nome}{" "}
-                          <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${r.linha === "ih" ? "bg-teal-soft text-teal" : "bg-canvas text-ink/60"}`}>
-                            {r.linha === "ih" ? "IH" : "CI"}
-                          </span>
+                          {r.linha === "ih" && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded font-medium bg-teal-soft text-teal">
+                      IH
+                    </span>
+                  )}
                         </td>
                         <td className="p-3 text-right font-mono-num">R$ {formatarMoedaSemSimbolo(r.orcamento_aprovado)}</td>
                         <td className="p-3 text-right font-mono-num font-medium">R$ {formatarMoedaSemSimbolo(r.valor_pago)}</td>

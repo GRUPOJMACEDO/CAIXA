@@ -113,9 +113,11 @@ function ConteudoMetas() {
                 <p className={`text-xs mb-1 font-medium ${MEDALHAS[i]?.texto}`}>{MEDALHAS[i]?.rotulo}</p>
                 <p className="font-display text-base font-semibold mb-1 leading-tight flex items-center gap-1.5">
                   {item.unidade_nome}
-                  <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${item.linha === "ih" ? "bg-teal-soft text-teal" : "bg-canvas text-muted"}`}>
-                    {item.linha === "ih" ? "IH" : "CI"}
-                  </span>
+                  {item.linha === "ih" && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded font-medium bg-teal-soft text-teal">
+                      IH
+                    </span>
+                  )}
                 </p>
                 {item.percentual === null ? (
                   <>
@@ -153,9 +155,11 @@ function ConteudoMetas() {
                         <span className="text-muted font-mono-num text-xs w-6 shrink-0">{offset + i + 4}º</span>
                         <span className={`w-36 shrink-0 truncate flex items-center gap-1.5 ${semMeta ? "text-muted" : ""}`}>
                           {item.unidade_nome}
-                          <span className={`text-[9px] px-1 py-0.5 rounded font-medium shrink-0 ${item.linha === "ih" ? "bg-teal-soft text-teal" : "bg-canvas text-muted"}`}>
-                            {item.linha === "ih" ? "IH" : "CI"}
-                          </span>
+                          {item.linha === "ih" && (
+                    <span className="text-[9px] px-1 py-0.5 rounded font-medium shrink-0 bg-teal-soft text-teal">
+                      IH
+                    </span>
+                  )}
                         </span>
                         {semMeta ? (
                           <span className="text-xs text-muted italic">Meta não definida</span>
