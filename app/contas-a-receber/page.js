@@ -8,6 +8,7 @@ import BotaoAtualizar from "../../components/BotaoAtualizar";
 import FormasPagamentoModal from "../../components/FormasPagamentoModal";
 import { supabase } from "../../lib/supabaseClient";
 import { useSessao } from "../../lib/SessaoContext";
+import { hojeBrasil } from "../../lib/fusoHorario";
 import { podeVerTodasUnidades } from "../../lib/permissions";
 import { formatarMoedaSemSimbolo, formatarDataBR } from "../../lib/formato";
 import { FORMAS_PAGAMENTO, precisaParcelas as precisaParcelasFn, precisaBandeira as precisaBandeiraFn } from "../../lib/formasPagamento";
@@ -61,7 +62,7 @@ function ConteudoContasAReceber() {
   const lembretes = linhas.filter((l) => horasDesde(l.ultimo_lancamento) >= 24);
   useEffect(() => {
     if (lembretesMostrados || lembretes.length === 0) return;
-    const chave = `lembrete-contas-receber-${new Date().toISOString().slice(0, 10)}`;
+    const chave = `lembrete-contas-receber-${hojeBrasil()}`;
     if (!window.localStorage.getItem(chave)) {
       setLembretesAbertos(true);
       window.localStorage.setItem(chave, "1");
@@ -129,7 +130,7 @@ function ConteudoContasAReceber() {
     setSalvando(true);
     const { error } = await supabase.from("lancamentos").insert({
       unidade_id: selecionada.unidade_id,
-      data: new Date().toISOString().slice(0, 10),
+      data: hojeBrasil(),
       numero_os: selecionada.numero_os,
       categoria_id: selecionada.categoria_id,
       modelo_id: selecionada.modelo_id,

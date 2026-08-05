@@ -1,11 +1,13 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Eye, EyeOff } from "lucide-react";
 import { supabase, loginParaEmail } from "../../lib/supabaseClient";
 
 export default function LoginPage() {
   const [login, setLogin] = useState("");
   const [senha, setSenha] = useState("");
+  const [mostrarSenha, setMostrarSenha] = useState(false);
   const [erro, setErro] = useState("");
   const [carregando, setCarregando] = useState(false);
   const [mostrarEsqueci, setMostrarEsqueci] = useState(false);
@@ -87,12 +89,23 @@ export default function LoginPage() {
           </div>
           <div className="mb-5">
             <label className="field-label">Senha</label>
-            <input
-              className="field-input"
-              type="password"
-              value={senha}
-              onChange={(e) => setSenha(e.target.value)}
-            />
+            <div className="relative">
+              <input
+                className="field-input pr-10"
+                type={mostrarSenha ? "text" : "password"}
+                value={senha}
+                onChange={(e) => setSenha(e.target.value)}
+              />
+              <button
+                type="button"
+                onClick={() => setMostrarSenha((v) => !v)}
+                tabIndex={-1}
+                title={mostrarSenha ? "Esconder senha" : "Mostrar senha"}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-ink transition"
+              >
+                {mostrarSenha ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
           </div>
 
           {erro && (

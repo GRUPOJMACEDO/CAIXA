@@ -45,9 +45,23 @@ function ConteudoMetas() {
 
   async function carregar() {
     setCarregando(true);
-    const view = linhaFiltro === "ih" ? "vw_painel_tv_ih" : "vw_painel_tv";
-    const { data } = await supabase.from(view).select("*");
-    setUnidadesRanking(data || []);
+    if (!linhaFiltro) {
+      // "CI + IH" — busca as duas views e junta, cada unidade podendo
+      // aparecer 2x (uma vez por linha), igual nos outros dashboards
+      const [{ data: ci }, { data: ih }] = await Promise.all([
+        supabase.from("vw_painel_tv").select("*"),
+        supabase.from("vw_painel_tv_ih").select("*"),
+      ]);
+      const combinado = [
+        ...(ci || []).map((u) => ({ ...u, linha: "ci" })),
+        ...(ih || []).map((u) => ({ ...u, linha: "ih" })),
+      ];
+      setUnidadesRanking(combinado);
+    } else {
+      const view = linhaFiltro === "ih" ? "vw_painel_tv_ih" : "vw_painel_tv";
+      const { data } = await supabase.from(view).select("*");
+      setUnidadesRanking((data || []).map((u) => ({ ...u, linha: linhaFiltro })));
+    }
     setCarregando(false);
   }
 
@@ -95,9 +109,14 @@ function ConteudoMetas() {
         <>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
             {top3.map((item, i) => (
-              <div key={item.unidade_id} className={`rounded-xl2 border-2 px-5 py-4 ${MEDALHAS[i]?.cor}`}>
+              <div key={`${item.unidade_id}-${item.linha}`} className={`rounded-xl2 border-2 px-5 py-4 ${MEDALHAS[i]?.cor}`}>
                 <p className={`text-xs mb-1 font-medium ${MEDALHAS[i]?.texto}`}>{MEDALHAS[i]?.rotulo}</p>
-                <p className="font-display text-base font-semibold mb-1 leading-tight">{item.unidade_nome}</p>
+                <p className="font-display text-base font-semibold mb-1 leading-tight flex items-center gap-1.5">
+                  {item.unidade_nome}
+                  <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${item.linha === "ih" ? "bg-teal-soft text-teal" : "bg-canvas text-muted"}`}>
+                    {item.linha === "ih" ? "IH" : "CI"}
+                  </span>
+                </p>
                 {item.percentual === null ? (
                   <>
                     <p className="font-display text-2xl font-semibold leading-none text-muted">— %</p>
@@ -130,9 +149,14 @@ function ConteudoMetas() {
                     const semMeta = item.percentual === null;
                     const pct = semMeta ? 0 : Math.min(100, item.percentual);
                     return (
-                      <div key={item.unidade_id} className="flex items-center gap-3 px-4 py-3 text-sm">
+                      <div key={`${item.unidade_id}-${item.linha}`} className="flex items-center gap-3 px-4 py-3 text-sm">
                         <span className="text-muted font-mono-num text-xs w-6 shrink-0">{offset + i + 4}º</span>
-                        <span className={`w-36 shrink-0 truncate ${semMeta ? "text-muted" : ""}`}>{item.unidade_nome}</span>
+                        <span className={`w-36 shrink-0 truncate flex items-center gap-1.5 ${semMeta ? "text-muted" : ""}`}>
+                          {item.unidade_nome}
+                          <span className={`text-[9px] px-1 py-0.5 rounded font-medium shrink-0 ${item.linha === "ih" ? "bg-teal-soft text-teal" : "bg-canvas text-muted"}`}>
+                            {item.linha === "ih" ? "IH" : "CI"}
+                          </span>
+                        </span>
                         {semMeta ? (
                           <span className="text-xs text-muted italic">Meta não definida</span>
                         ) : (

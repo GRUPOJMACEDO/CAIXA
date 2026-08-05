@@ -7,6 +7,7 @@ import CurrencyInput from "../../components/CurrencyInput";
 import FormasPagamentoModal from "../../components/FormasPagamentoModal";
 import { supabase } from "../../lib/supabaseClient";
 import { useSessao } from "../../lib/SessaoContext";
+import { hojeBrasil } from "../../lib/fusoHorario";
 import { podeAlterar, podeExcluirLancamento } from "../../lib/permissions";
 import { iconeCategoria } from "../../lib/iconesCategoria";
 import { formatarDataBR, formatarMoedaSemSimbolo } from "../../lib/formato";
@@ -98,7 +99,7 @@ function Conteudo() {
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
-    link.download = `consulta-caixa-jmacedo-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.download = `consulta-caixa-jmacedo-${hojeBrasil()}.csv`;
     link.click();
   }
 

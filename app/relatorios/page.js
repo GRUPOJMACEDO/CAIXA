@@ -5,6 +5,7 @@ import AppShell from "../../components/AppShell";
 import Modal from "../../components/Modal";
 import { supabase } from "../../lib/supabaseClient";
 import { useSessao } from "../../lib/SessaoContext";
+import { hojeBrasil } from "../../lib/fusoHorario";
 import { podeVerTodasUnidades } from "../../lib/permissions";
 import { iconeCategoria } from "../../lib/iconesCategoria";
 import { formatarDataBR, formatarMoedaSemSimbolo } from "../../lib/formato";
@@ -38,7 +39,7 @@ function paraCSV(linhas) {
 function Conteudo() {
   const { usuario, unidades, linhaFiltro } = useSessao();
   const [dataDe, setDataDe] = useState(inicioMes());
-  const [dataAte, setDataAte] = useState(new Date().toISOString().slice(0, 10));
+  const [dataAte, setDataAte] = useState(hojeBrasil());
   const [unidadesSelecionadas, setUnidadesSelecionadas] = useState([]);
   const [popupUnidades, setPopupUnidades] = useState(false);
   const [resultados, setResultados] = useState([]);

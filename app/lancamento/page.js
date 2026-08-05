@@ -10,14 +10,11 @@ import { useSessao } from "../../lib/SessaoContext";
 import { podeLancarDataRetroativa } from "../../lib/permissions";
 import { normalizarNumeroOS, REGRA_OS_TEXTO } from "../../lib/validacaoOS";
 import { FORMAS_PAGAMENTO, BANDEIRAS, precisaParcelas as precisaParcelasFn, precisaBandeira as precisaBandeiraFn } from "../../lib/formasPagamento";
+import { hojeBrasil as hoje } from "../../lib/fusoHorario";
 
 let proximoIdLinha = 1;
 function gerarIdLinha() {
   return proximoIdLinha++;
-}
-
-function hoje() {
-  return new Date().toISOString().slice(0, 10);
 }
 
 function Rotulo({ icone: Icone, children }) {
@@ -29,7 +26,7 @@ function Rotulo({ icone: Icone, children }) {
 }
 
 function FormularioLancamento() {
-  const { usuario, unidades, modoIH } = useSessao();
+  const { usuario, unidades, modoLinha } = useSessao();
   const [categorias, setCategorias] = useState([]);
   const [tiposServico, setTiposServico] = useState([]);
   const [carregandoTipos, setCarregandoTipos] = useState(false);
@@ -37,7 +34,7 @@ function FormularioLancamento() {
   // linha (CI/IH) deste lançamento: fixa pelo login, ou escolhida na tela
   // (só gestão vê a escolha — atendente dedicado nunca decide isso)
   const linhaFixaUsuario = usuario.linha || null;
-  const [linhaOperacao, setLinhaOperacao] = useState(linhaFixaUsuario || (modoIH ? "ih" : "ci"));
+  const [linhaOperacao, setLinhaOperacao] = useState(linhaFixaUsuario || (modoLinha === "ih" ? "ih" : "ci"));
   const precisaEscolherLinha = !linhaFixaUsuario;
   const unidadesDaLinha = unidades.filter((u) => (linhaOperacao === "ih" ? u.atende_ih : u.atende_ci));
 
