@@ -55,14 +55,22 @@ export default function BotaoMural() {
 
   const loginsValidos = new Set(usuariosLista.map((u) => u.login.toLowerCase()));
 
-  useEffect(() => {
-    supabase
+  async function carregarUsuariosParaMencao() {
+    const { data, error } = await supabase
       .from("usuarios")
       .select("id, nome_completo, login")
       .eq("ativo", true)
-      .order("nome_completo")
-      .then(({ data }) => setUsuariosLista(data || []));
-  }, []);
+      .order("nome_completo");
+    if (error) {
+      console.error("Erro ao carregar usuários para @menção:", error.message);
+      return;
+    }
+    setUsuariosLista(data || []);
+  }
+
+  useEffect(() => {
+    carregarUsuariosParaMencao();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function garantirStatus() {
     const { data } = await supabase.from("mural_status_usuario").select("*").eq("usuario_id", usuario.id).maybeSingle();
@@ -120,7 +128,7 @@ export default function BotaoMural() {
 
   async function abrirMural() {
     setAberto(true);
-    await carregarMensagens();
+    await Promise.all([carregarMensagens(), carregarUsuariosParaMencao()]);
     await supabase
       .from("mural_status_usuario")
       .upsert({ usuario_id: usuario.id, ultima_leitura: new Date().toISOString() }, { onConflict: "usuario_id" });
@@ -167,7 +175,7 @@ export default function BotaoMural() {
     setTexto(valor);
 
     const antesCursor = valor.slice(0, cursor);
-    const match = antesCursor.match(/(?:^|\s)@([a-zA-Z0-9._]*)$/);
+    const match = antesCursor.match(/@([a-zA-Z0-9._]*)$/);
     if (match) {
       const termo = match[1].toLowerCase();
       const filtradas = usuariosLista
@@ -185,7 +193,7 @@ export default function BotaoMural() {
     const cursor = el ? el.selectionStart : texto.length;
     const antes = texto.slice(0, cursor);
     const depois = texto.slice(cursor);
-    const novoAntes = antes.replace(/(^|\s)@([a-zA-Z0-9._]*)$/, `$1@${u.login} `);
+    const novoAntes = antes.replace(/@([a-zA-Z0-9._]*)$/, `@${u.login} `);
     const novoTexto = novoAntes + depois;
     setTexto(novoTexto);
     setMostrarArroba(false);
