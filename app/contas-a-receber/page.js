@@ -149,25 +149,8 @@ function ConteudoContasAReceber() {
       return;
     }
 
-    const dadosAtualizados = await carregar();
-    const atualizada = dadosAtualizados.find(
-      (l) =>
-        l.unidade_id === selecionada.unidade_id &&
-        l.numero_os === selecionada.numero_os &&
-        l.tipo_servico_id === selecionada.tipo_servico_id &&
-        l.linha === selecionada.linha
-    );
-    if (atualizada) {
-      // ainda sobrou saldo — mantém o pop-up aberto, pronto para o próximo lançamento
-      setSelecionada(atualizada);
-      setValorAgora(Number(atualizada.falta_pagar));
-      setFormaPagamento("");
-      setFormasPagamentoPopup([]);
-      await carregarHistorico(atualizada.unidade_id, atualizada.numero_os, atualizada.tipo_servico_id, atualizada.linha);
-    } else {
-      // saldo zerado — a OS some da lista de contas a receber, fecha o pop-up
-      fecharPopup();
-    }
+    await carregar();
+    fecharPopup();
   }
 
   function aoSalvarModalFormasPopup(formas) {

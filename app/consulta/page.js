@@ -56,11 +56,6 @@ function Conteudo() {
   const snapshotEdicaoConsultaRef = useRef(null);
   const mostrarUnidade = unidades.length > 1;
   const podeEditar = podeAlterar(usuario.cargo, usuario.linha);
-  function podeEditarLinha(r) {
-    if (!podeEditar) return false;
-    if (usuario.cargo === "operacional") return r.atendente_id === usuario.id;
-    return true;
-  }
   const podeExcluir = podeExcluirLancamento(usuario.cargo);
 
   useEffect(() => {
@@ -369,7 +364,7 @@ function Conteudo() {
                         <td className="p-3 text-right font-mono-num font-medium">R$ {formatarMoedaSemSimbolo(r.valor_pago)}</td>
                         <td className="p-3 text-right">
                           <div className="flex items-center justify-end gap-2">
-                            {podeEditarLinha(r) && (
+                            {podeEditar && (
                               <button
                                 className="text-muted hover:text-gold transition"
                                 title="Alterar"
@@ -478,7 +473,7 @@ function Conteudo() {
                     <Trash2 size={14} /> Excluir
                   </button>
                 )}
-                {podeEditarLinha(selecionado) && (
+                {podeEditar && (
                   <button className="btn flex items-center gap-1.5" onClick={() => setEditando(true)}>
                     <Pencil size={14} /> Alterar
                   </button>
