@@ -11,7 +11,7 @@ import { useSessao } from "../lib/SessaoContext";
  * inclusão — cria um pedido pendente, que quem administra Modelos
  * aprova depois em Configurações > Modelos.
  */
-export default function ComboBoxModelo({ categoriaId, unidadeId, modeloId, onSelecionar, disabled }) {
+export default function ComboBoxModelo({ categoriaId, unidadeId, modeloId, onSelecionar, disabled, buscarEmTodasCategorias }) {
   const { usuario } = useSessao();
   const [modelos, setModelos] = useState([]);
   const [carregandoModelos, setCarregandoModelos] = useState(false);
@@ -30,16 +30,13 @@ export default function ComboBoxModelo({ categoriaId, unidadeId, modeloId, onSel
       return;
     }
     setCarregandoModelos(true);
-    supabase
-      .from("modelos")
-      .select("*")
-      .eq("categoria_id", categoriaId)
-      .order("nome")
-      .then(({ data }) => {
+    let query = supabase.from("modelos").select("*").order("nome");
+    if (!buscarEmTodasCategorias) query = query.eq("categoria_id", categoriaId);
+    query.then(({ data }) => {
         setModelos(data || []);
         setCarregandoModelos(false);
       });
-  }, [categoriaId]);
+  }, [categoriaId, buscarEmTodasCategorias]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (modeloId) {

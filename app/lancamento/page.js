@@ -413,6 +413,7 @@ function FormularioLancamento() {
             modeloId={modeloId}
             onSelecionar={setModeloId}
             disabled={!categoriaId}
+            buscarEmTodasCategorias={categorias.find((c) => c.id === categoriaId)?.somente_ih || false}
           />
         </div>
         <div>
