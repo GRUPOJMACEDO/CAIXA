@@ -15,6 +15,7 @@ function Conteudo() {
   const [editando, setEditando] = useState(null);
   const [nomeEdicao, setNomeEdicao] = useState("");
   const [somenteIhEdicao, setSomenteIhEdicao] = useState(false);
+  const [pareadaEdicao, setPareadaEdicao] = useState("");
 
   async function carregar() {
     const { data } = await supabase.from("categorias").select("*").order("nome");
@@ -34,7 +35,11 @@ function Conteudo() {
   }
 
   async function salvarEdicao(id) {
-    const { data, error } = await supabase.from("categorias").update({ nome: nomeEdicao, somente_ih: somenteIhEdicao }).eq("id", id).select();
+    const { data, error } = await supabase
+      .from("categorias")
+      .update({ nome: nomeEdicao, somente_ih: somenteIhEdicao, categoria_pareada_id: pareadaEdicao || null })
+      .eq("id", id)
+      .select();
     if (error) {
       alert("Erro ao salvar: " + error.message);
       return;
@@ -42,6 +47,9 @@ function Conteudo() {
     if (!data || data.length === 0) {
       alert("Não foi possível salvar — você não tem permissão para esta ação.");
       return;
+    }
+    if (pareadaEdicao) {
+      await supabase.from("categorias").update({ categoria_pareada_id: id }).eq("id", pareadaEdicao);
     }
     setEditando(null);
     carregar();
@@ -79,7 +87,7 @@ function Conteudo() {
   }
 
   return (
-    <div className="max-w-2xl">
+    <div className="max-w-3xl">
       <div className="mb-6">
         <p className="text-xs uppercase tracking-wider text-muted mb-1">Configurações</p>
         <h1 className="font-display text-2xl font-semibold text-ink">Categorias</h1>
@@ -112,12 +120,30 @@ function Conteudo() {
                 <span className="flex-1 text-sm font-medium flex items-center gap-1.5">
                   {c.nome}
                   {c.somente_ih && <span className="text-[9px] px-1.5 py-0.5 rounded font-medium bg-teal-soft text-teal">IH</span>}
+                  {c.categoria_pareada_id && (
+                    <span className="text-[10px] text-muted">
+                      ↔ {categorias.find((x) => x.id === c.categoria_pareada_id)?.nome}
+                    </span>
+                  )}
                 </span>
               )}
               {emEdicao && (
-                <label className="flex items-center gap-1 text-xs text-muted shrink-0">
-                  <input type="checkbox" checked={somenteIhEdicao} onChange={(e) => setSomenteIhEdicao(e.target.checked)} /> IH
-                </label>
+                <div className="flex items-center gap-2 shrink-0">
+                  <label className="flex items-center gap-1 text-xs text-muted">
+                    <input type="checkbox" checked={somenteIhEdicao} onChange={(e) => setSomenteIhEdicao(e.target.checked)} /> IH
+                  </label>
+                  <select
+                    className="field-input text-xs py-1.5 w-32"
+                    value={pareadaEdicao}
+                    onChange={(e) => setPareadaEdicao(e.target.value)}
+                    title="Categoria pareada — compartilha o cadastro de modelos"
+                  >
+                    <option value="">Sem par</option>
+                    {categorias.filter((x) => x.id !== c.id).map((x) => (
+                      <option key={x.id} value={x.id}>↔ {x.nome}</option>
+                    ))}
+                  </select>
+                </div>
               )}
               <div className="flex items-center gap-1.5 shrink-0">
                 {emEdicao ? (
@@ -127,7 +153,7 @@ function Conteudo() {
                   </>
                 ) : (
                   <>
-                    <button className="text-muted hover:text-gold transition p-1.5" title="Editar" onClick={() => { setEditando(c.id); setNomeEdicao(c.nome); setSomenteIhEdicao(c.somente_ih || false); }}>
+                    <button className="text-muted hover:text-gold transition p-1.5" title="Editar" onClick={() => { setEditando(c.id); setNomeEdicao(c.nome); setSomenteIhEdicao(c.somente_ih || false); setPareadaEdicao(c.categoria_pareada_id || ""); }}>
                       <Pencil size={15} />
                     </button>
                     <button className="btn text-danger px-2 py-1.5" title="Excluir" onClick={() => excluir(c)}>

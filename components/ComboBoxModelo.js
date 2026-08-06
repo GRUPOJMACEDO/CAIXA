@@ -6,13 +6,23 @@ import { supabase } from "../lib/supabaseClient";
 import { useSessao } from "../lib/SessaoContext";
 
 /**
- * Campo de busca de Modelo com autocomplete. Se não encontrar nada
- * parecido com o texto digitado, oferece um botão para solicitar a
- * inclusão — cria um pedido pendente, que quem administra Modelos
- * aprova depois em Configurações > Modelos.
+ * Campo de busca de Modelo com autocomplete.
+ *
+ * `categoriaIdsBusca` controla em quais categorias a busca acontece:
+ *   - undefined/omitido → busca só em `categoriaId` (padrão)
+ *   - array de ids → busca em todas elas (ex: TV + DTV pareadas)
+ *   - null → busca em TODAS as categorias (categorias "somente IH"
+ *     sem par definido, para reaproveitar o cadastro do balcão)
+ *
+ * Se não encontrar nada:
+ *   - login de IH → cadastra o modelo direto (com confirmação),
+ *     sem precisar de aprovação — pensado pro técnico em campo.
+ *   - demais → cria uma solicitação pendente, que quem administra
+ *     Modelos aprova depois em Configurações > Modelos.
  */
-export default function ComboBoxModelo({ categoriaId, unidadeId, modeloId, onSelecionar, disabled, buscarEmTodasCategorias }) {
+export default function ComboBoxModelo({ categoriaId, unidadeId, modeloId, onSelecionar, disabled, categoriaIdsBusca }) {
   const { usuario } = useSessao();
+  const ehIH = usuario?.linha === "ih";
   const [modelos, setModelos] = useState([]);
   const [carregandoModelos, setCarregandoModelos] = useState(false);
   const [texto, setTexto] = useState("");
@@ -21,6 +31,8 @@ export default function ComboBoxModelo({ categoriaId, unidadeId, modeloId, onSel
   const [enviando, setEnviando] = useState(false);
   const [confirmando, setConfirmando] = useState(false);
   const containerRef = useRef(null);
+
+  const chaveBusca = categoriaIdsBusca === null ? "todas" : (categoriaIdsBusca || [categoriaId]).join(",");
 
   useEffect(() => {
     setTexto("");
@@ -31,12 +43,18 @@ export default function ComboBoxModelo({ categoriaId, unidadeId, modeloId, onSel
     }
     setCarregandoModelos(true);
     let query = supabase.from("modelos").select("*").order("nome");
-    if (!buscarEmTodasCategorias) query = query.eq("categoria_id", categoriaId);
+    if (categoriaIdsBusca === null) {
+      // busca em todas as categorias
+    } else if (Array.isArray(categoriaIdsBusca) && categoriaIdsBusca.length > 0) {
+      query = query.in("categoria_id", categoriaIdsBusca);
+    } else {
+      query = query.eq("categoria_id", categoriaId);
+    }
     query.then(({ data }) => {
-        setModelos(data || []);
-        setCarregandoModelos(false);
-      });
-  }, [categoriaId, buscarEmTodasCategorias]); // eslint-disable-line react-hooks/exhaustive-deps
+      setModelos(data || []);
+      setCarregandoModelos(false);
+    });
+  }, [categoriaId, chaveBusca]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (modeloId) {
@@ -80,6 +98,24 @@ export default function ComboBoxModelo({ categoriaId, unidadeId, modeloId, onSel
     setConfirmando(false);
     setSolicitado(true);
     setAberto(false);
+  }
+
+  async function cadastrarDireto() {
+    if (!texto.trim() || !categoriaId) return;
+    setEnviando(true);
+    const { data, error } = await supabase
+      .from("modelos")
+      .insert({ categoria_id: categoriaId, nome: texto.trim().toUpperCase() })
+      .select()
+      .single();
+    setEnviando(false);
+    if (error) {
+      alert("Não foi possível cadastrar: " + error.message);
+      return;
+    }
+    setModelos((atual) => [...atual, data]);
+    setConfirmando(false);
+    escolher(data);
   }
 
   return (
@@ -126,12 +162,12 @@ export default function ComboBoxModelo({ categoriaId, unidadeId, modeloId, onSel
                   onClick={() => setConfirmando(true)}
                   className="btn text-xs flex items-center gap-1.5 text-gold border-gold/40 hover:bg-gold-soft/40"
                 >
-                  <PlusCircle size={13} /> {`Solicitar cadastro de "${texto.trim()}"`}
+                  <PlusCircle size={13} /> {ehIH ? `Cadastrar modelo "${texto.trim()}"` : `Solicitar cadastro de "${texto.trim()}"`}
                 </button>
               )}
               {solicitado && (
                 <p className="text-teal text-xs flex items-center gap-1.5">
-                  <Check size={13} /> Pedido enviado! Quem administra Modelos vai aprovar.
+                  <Check size={13} /> {ehIH ? "Modelo cadastrado!" : "Pedido enviado! Quem administra Modelos vai aprovar."}
                 </p>
               )}
             </div>
@@ -140,19 +176,32 @@ export default function ComboBoxModelo({ categoriaId, unidadeId, modeloId, onSel
       )}
 
       {confirmando && (
-        <Modal titulo="Confirmar solicitação" onFechar={() => setConfirmando(false)} largura="max-w-sm">
-          <p className="text-sm text-ink mb-1">
-            Solicitar o cadastro do modelo <span className="font-semibold">"{texto.trim()}"</span>?
-          </p>
-          <p className="text-xs text-muted mb-5">
-            O pedido fica pendente até quem administra Modelos aprovar.
-          </p>
+        <Modal titulo={ehIH ? "Confirmar cadastro do modelo" : "Confirmar solicitação"} onFechar={() => setConfirmando(false)} largura="max-w-sm">
+          {ehIH ? (
+            <>
+              <p className="text-sm text-ink mb-1">
+                Cadastrar o modelo <span className="font-semibold">"{texto.trim()}"</span> agora, direto no sistema?
+              </p>
+              <p className="text-xs text-muted mb-5">
+                Como você é do atendimento IH, o cadastro é feito na hora, sem precisar de aprovação — só confirme que o nome do modelo está completo e correto (igual você já cadastra no GSPN).
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="text-sm text-ink mb-1">
+                Solicitar o cadastro do modelo <span className="font-semibold">"{texto.trim()}"</span>?
+              </p>
+              <p className="text-xs text-muted mb-5">
+                O pedido fica pendente até quem administra Modelos aprovar.
+              </p>
+            </>
+          )}
           <div className="flex justify-end gap-2">
             <button type="button" className="btn text-sm" onClick={() => setConfirmando(false)}>
               Cancelar
             </button>
-            <button type="button" className="btn-primary text-sm" onClick={solicitarInclusao} disabled={enviando}>
-              {enviando ? "Enviando…" : "Confirmar solicitação"}
+            <button type="button" className="btn-primary text-sm" onClick={ehIH ? cadastrarDireto : solicitarInclusao} disabled={enviando}>
+              {enviando ? "Enviando…" : ehIH ? "Confirmar cadastro" : "Confirmar solicitação"}
             </button>
           </div>
         </Modal>

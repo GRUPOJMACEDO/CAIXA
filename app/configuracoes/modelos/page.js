@@ -308,8 +308,25 @@ function Conteudo() {
         <button className="btn-primary" type="submit">Adicionar</button>
       </form>
 
+      {(() => {
+        const categoriaAtual = categorias.find((c) => c.id === categoriaId);
+        const pareada = categoriaAtual ? categorias.find((c) => c.id === categoriaAtual.categoria_pareada_id) : null;
+        return categoriaId && pareada ? (
+          <p className="text-xs text-muted mb-3 -mt-3">
+            Mostrando também os modelos de <span className="font-medium text-ink">{pareada.nome}</span> — as duas categorias compartilham o mesmo cadastro.
+          </p>
+        ) : null;
+      })()}
+
       <div className="card divide-y divide-line max-h-[520px] overflow-y-auto">
-        {modelos.map((m) => (
+        {modelos
+          .filter((m) => {
+            if (!categoriaId) return true;
+            const categoriaAtual = categorias.find((c) => c.id === categoriaId);
+            const idsValidos = [categoriaId, categoriaAtual?.categoria_pareada_id].filter(Boolean);
+            return idsValidos.includes(m.categoria_id);
+          })
+          .map((m) => (
           <div key={m.id} className="p-3 flex items-center justify-between gap-3 text-sm">
             {editando === m.id ? (
               <input className="field-input flex-1" value={nomeEdicao} onChange={(e) => setNomeEdicao(e.target.value)} autoFocus />

@@ -413,7 +413,13 @@ function FormularioLancamento() {
             modeloId={modeloId}
             onSelecionar={setModeloId}
             disabled={!categoriaId}
-            buscarEmTodasCategorias={categorias.find((c) => c.id === categoriaId)?.somente_ih || false}
+            categoriaIdsBusca={(() => {
+              const cat = categorias.find((c) => c.id === categoriaId);
+              if (!cat) return undefined;
+              if (cat.categoria_pareada_id) return [cat.id, cat.categoria_pareada_id];
+              if (cat.somente_ih) return null; // sem par definido: busca em todas
+              return undefined; // padrão: só a própria categoria
+            })()}
           />
         </div>
         <div>
