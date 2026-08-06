@@ -55,7 +55,12 @@ function Conteudo() {
   const [linhaEditandoEdicao, setLinhaEditandoEdicao] = useState(null);
   const snapshotEdicaoConsultaRef = useRef(null);
   const mostrarUnidade = unidades.length > 1;
-  const podeEditar = podeAlterar(usuario.cargo);
+  const podeEditar = podeAlterar(usuario.cargo, usuario.linha);
+  function podeEditarLinha(r) {
+    if (!podeEditar) return false;
+    if (usuario.cargo === "operacional") return r.atendente_id === usuario.id;
+    return true;
+  }
   const podeExcluir = podeExcluirLancamento(usuario.cargo);
 
   useEffect(() => {
@@ -68,7 +73,7 @@ function Conteudo() {
     let query = supabase
       .from("lancamentos")
       .select(
-        "id, data, numero_os, valor_pago, orcamento_aprovado, forma_pagamento, parcelas, bandeira, formas_pagamento, observacoes, linha, unidade_id, categoria_id, tipo_servico_id, unidades(nome), categorias(nome), tipos_servico(nome), usuarios!atendente_id(nome_completo)"
+        "id, data, numero_os, valor_pago, orcamento_aprovado, forma_pagamento, parcelas, bandeira, formas_pagamento, observacoes, linha, unidade_id, categoria_id, tipo_servico_id, atendente_id, unidades(nome), categorias(nome), tipos_servico(nome), usuarios!atendente_id(nome_completo)"
       )
       .in("unidade_id", unidadeId ? [unidadeId] : unidades.map((u) => u.id))
       .order("data", { ascending: false })
@@ -364,7 +369,7 @@ function Conteudo() {
                         <td className="p-3 text-right font-mono-num font-medium">R$ {formatarMoedaSemSimbolo(r.valor_pago)}</td>
                         <td className="p-3 text-right">
                           <div className="flex items-center justify-end gap-2">
-                            {podeEditar && (
+                            {podeEditarLinha(r) && (
                               <button
                                 className="text-muted hover:text-gold transition"
                                 title="Alterar"
@@ -473,7 +478,7 @@ function Conteudo() {
                     <Trash2 size={14} /> Excluir
                   </button>
                 )}
-                {podeEditar && (
+                {podeEditarLinha(selecionado) && (
                   <button className="btn flex items-center gap-1.5" onClick={() => setEditando(true)}>
                     <Pencil size={14} /> Alterar
                   </button>
