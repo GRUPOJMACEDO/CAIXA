@@ -37,7 +37,11 @@ function FormularioLancamento() {
   const [linhaOperacao, setLinhaOperacao] = useState(linhaFixaUsuario || (modoLinha === "ih" ? "ih" : "ci"));
   const precisaEscolherLinha = !linhaFixaUsuario;
   const unidadesDaLinha = unidades.filter((u) => (linhaOperacao === "ih" ? u.atende_ih : u.atende_ci));
-  const categoriasVisiveis = categorias.filter((c) => linhaOperacao === "ih" || !c.somente_ih);
+  const categoriasVisiveis = categorias.filter((c) => {
+    if (linhaFixaUsuario === "ih") return c.somente_ih; // login só-IH: só as categorias de IH
+    if (linhaOperacao === "ih") return true; // gestão em modo IH: vê tudo
+    return !c.somente_ih; // CI (fixo ou gestão em modo CI): esconde as exclusivas de IH
+  });
 
   const unidadeUnica = unidadesDaLinha.length === 1;
   const [unidadeId, setUnidadeId] = useState("");
