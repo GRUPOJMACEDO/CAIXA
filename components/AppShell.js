@@ -218,16 +218,18 @@ function Shell({ children }) {
 
           <div>
             {!recolhido && <p className="px-3 text-[11px] uppercase tracking-wider font-bold mb-2" style={{ color: "#1B3A5C" }}>Painel</p>}
-            <a
-              href="/painel"
-              target="_blank"
-              rel="noopener noreferrer"
-              title={recolhido ? "Abrir painel de TV" : undefined}
-              className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-muted hover:bg-ink/5 hover:text-ink transition ${recolhido ? "justify-center" : ""}`}
-            >
-              <Tv size={16} strokeWidth={2} className="shrink-0" />
-              {!recolhido && "Abrir painel de TV"}
-            </a>
+            {usuario.linha !== "ih" && (
+              <a
+                href="/painel"
+                target="_blank"
+                rel="noopener noreferrer"
+                title={recolhido ? "Abrir painel de TV" : undefined}
+                className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-muted hover:bg-ink/5 hover:text-ink transition ${recolhido ? "justify-center" : ""}`}
+              >
+                <Tv size={16} strokeWidth={2} className="shrink-0" />
+                {!recolhido && "Abrir painel de TV"}
+              </a>
+            )}
             {(usuario.linha === "ih" || podeAlternarLinha) && (
               <a
                 href="/painel/ih"
@@ -237,7 +239,7 @@ function Shell({ children }) {
                 className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-muted hover:bg-ink/5 hover:text-ink transition ${recolhido ? "justify-center" : ""}`}
               >
                 <Tv size={16} strokeWidth={2} className="shrink-0 text-teal" />
-                {!recolhido && "Painel de TV — IH"}
+                {!recolhido && (usuario.linha === "ih" ? "Abrir painel de TV" : "Painel de TV — IH")}
               </a>
             )}
           </div>

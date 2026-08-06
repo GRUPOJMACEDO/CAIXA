@@ -37,6 +37,7 @@ function FormularioLancamento() {
   const [linhaOperacao, setLinhaOperacao] = useState(linhaFixaUsuario || (modoLinha === "ih" ? "ih" : "ci"));
   const precisaEscolherLinha = !linhaFixaUsuario;
   const unidadesDaLinha = unidades.filter((u) => (linhaOperacao === "ih" ? u.atende_ih : u.atende_ci));
+  const categoriasVisiveis = categorias.filter((c) => linhaOperacao === "ih" || !c.somente_ih);
 
   const unidadeUnica = unidadesDaLinha.length === 1;
   const [unidadeId, setUnidadeId] = useState("");
@@ -85,6 +86,14 @@ function FormularioLancamento() {
   useEffect(() => {
     supabase.from("categorias").select("*").order("nome").then(({ data }) => setCategorias(data || []));
   }, []);
+
+  // se a categoria escolhida for exclusiva de IH e a linha virar CI, zera a
+  // seleção (a categoria não existe mais nas opções visíveis)
+  useEffect(() => {
+    if (categoriaId && !categoriasVisiveis.some((c) => c.id === categoriaId)) {
+      setCategoriaId("");
+    }
+  }, [linhaOperacao]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // tipos de serviço dependem da categoria escolhida (modelo é buscado pelo ComboBoxModelo)
   useEffect(() => {
@@ -387,7 +396,7 @@ function FormularioLancamento() {
           <Rotulo icone={Tags}>Categoria</Rotulo>
           <select className="field-input" value={categoriaId} onChange={(e) => setCategoriaId(e.target.value)} required>
             <option value="">Selecione</option>
-            {categorias.map((c) => (
+            {categoriasVisiveis.map((c) => (
               <option key={c.id} value={c.id}>{c.nome}</option>
             ))}
           </select>

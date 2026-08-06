@@ -11,8 +11,10 @@ function Conteudo() {
   const { usuario } = useSessao();
   const [categorias, setCategorias] = useState([]);
   const [nome, setNome] = useState("");
+  const [somenteIhNova, setSomenteIhNova] = useState(false);
   const [editando, setEditando] = useState(null);
   const [nomeEdicao, setNomeEdicao] = useState("");
+  const [somenteIhEdicao, setSomenteIhEdicao] = useState(false);
 
   async function carregar() {
     const { data } = await supabase.from("categorias").select("*").order("nome");
@@ -25,13 +27,14 @@ function Conteudo() {
 
   async function salvar(e) {
     e.preventDefault();
-    await supabase.from("categorias").insert({ nome });
+    await supabase.from("categorias").insert({ nome, somente_ih: somenteIhNova });
     setNome("");
+    setSomenteIhNova(false);
     carregar();
   }
 
   async function salvarEdicao(id) {
-    const { data, error } = await supabase.from("categorias").update({ nome: nomeEdicao }).eq("id", id).select();
+    const { data, error } = await supabase.from("categorias").update({ nome: nomeEdicao, somente_ih: somenteIhEdicao }).eq("id", id).select();
     if (error) {
       alert("Erro ao salvar: " + error.message);
       return;
@@ -88,6 +91,9 @@ function Conteudo() {
           <label className="field-label">Nova categoria</label>
           <input className="field-input" placeholder="Ex: Robô" value={nome} onChange={(e) => setNome(e.target.value)} required />
         </div>
+        <label className="flex items-center gap-1.5 text-sm text-muted pb-2.5">
+          <input type="checkbox" checked={somenteIhNova} onChange={(e) => setSomenteIhNova(e.target.checked)} /> Somente IH
+        </label>
         <button className="btn-primary" type="submit">Adicionar</button>
       </form>
 
@@ -103,7 +109,15 @@ function Conteudo() {
               {emEdicao ? (
                 <input className="field-input flex-1" value={nomeEdicao} onChange={(e) => setNomeEdicao(e.target.value)} autoFocus />
               ) : (
-                <span className="flex-1 text-sm font-medium">{c.nome}</span>
+                <span className="flex-1 text-sm font-medium flex items-center gap-1.5">
+                  {c.nome}
+                  {c.somente_ih && <span className="text-[9px] px-1.5 py-0.5 rounded font-medium bg-teal-soft text-teal">IH</span>}
+                </span>
+              )}
+              {emEdicao && (
+                <label className="flex items-center gap-1 text-xs text-muted shrink-0">
+                  <input type="checkbox" checked={somenteIhEdicao} onChange={(e) => setSomenteIhEdicao(e.target.checked)} /> IH
+                </label>
               )}
               <div className="flex items-center gap-1.5 shrink-0">
                 {emEdicao ? (
@@ -113,7 +127,7 @@ function Conteudo() {
                   </>
                 ) : (
                   <>
-                    <button className="text-muted hover:text-gold transition p-1.5" title="Editar" onClick={() => { setEditando(c.id); setNomeEdicao(c.nome); }}>
+                    <button className="text-muted hover:text-gold transition p-1.5" title="Editar" onClick={() => { setEditando(c.id); setNomeEdicao(c.nome); setSomenteIhEdicao(c.somente_ih || false); }}>
                       <Pencil size={15} />
                     </button>
                     <button className="btn text-danger px-2 py-1.5" title="Excluir" onClick={() => excluir(c)}>
