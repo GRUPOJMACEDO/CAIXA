@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { Save } from "lucide-react";
 import AppShell from "../../../components/AppShell";
 import CurrencyInput from "../../../components/CurrencyInput";
 import { supabase } from "../../../lib/supabaseClient";
@@ -60,6 +61,8 @@ function Conteudo() {
         [mesIso]: { ...(atual[unidadeId]?.[mesIso] || {}), [linha]: valor },
       },
     }));
+    const chave = `${unidadeId}-${mesIso}-${linha}`;
+    setSalvo((s) => ({ ...s, [chave]: false }));
   }
 
   async function salvar(unidadeId, mesIso, linha) {
@@ -77,7 +80,6 @@ function Conteudo() {
     );
     const chave = `${unidadeId}-${mesIso}-${linha}`;
     setSalvo((s) => ({ ...s, [chave]: true }));
-    setTimeout(() => setSalvo((s) => ({ ...s, [chave]: false })), 1500);
   }
 
   const podeEditar = [CARGOS.GERENCIA, CARGOS.ADMINISTRADOR, CARGOS.DIRETOR].includes(usuario.cargo);
@@ -125,8 +127,14 @@ function Conteudo() {
                           className="w-44"
                         />
                         {podeEditar && (
-                          <button className="btn text-xs px-2 py-1" onClick={() => salvar(u.id, m, linha)}>
-                            {salvo[chave] ? "✓" : "OK"}
+                          <button
+                            className={`p-1.5 rounded-md transition ${
+                              salvo[chave] ? "text-white bg-teal" : "text-muted hover:text-ink hover:bg-canvas"
+                            }`}
+                            title={salvo[chave] ? "Salvo" : "Salvar"}
+                            onClick={() => salvar(u.id, m, linha)}
+                          >
+                            <Save size={14} />
                           </button>
                         )}
                       </div>

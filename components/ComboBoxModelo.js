@@ -103,11 +103,30 @@ export default function ComboBoxModelo({ categoriaId, unidadeId, modeloId, onSel
   async function cadastrarDireto() {
     if (!texto.trim() || !categoriaId) return;
     setEnviando(true);
+    const nomeNormalizado = texto.trim().toUpperCase();
     const { data, error } = await supabase
       .from("modelos")
-      .insert({ categoria_id: categoriaId, nome: texto.trim().toUpperCase() })
+      .insert({ categoria_id: categoriaId, nome: nomeNormalizado })
       .select()
       .single();
+
+    if (error?.code === "23505") {
+      // já existe um modelo igual nessa categoria — busca e seleciona em vez de dar erro
+      const { data: existente } = await supabase
+        .from("modelos")
+        .select("*")
+        .eq("categoria_id", categoriaId)
+        .eq("nome", nomeNormalizado)
+        .maybeSingle();
+      setEnviando(false);
+      if (existente) {
+        setModelos((atual) => (atual.some((m) => m.id === existente.id) ? atual : [...atual, existente]));
+        setConfirmando(false);
+        escolher(existente);
+        return;
+      }
+    }
+
     setEnviando(false);
     if (error) {
       alert("Não foi possível cadastrar: " + error.message);

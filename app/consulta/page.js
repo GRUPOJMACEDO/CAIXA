@@ -46,6 +46,7 @@ function Conteudo() {
   const [selecionado, setSelecionado] = useState(null);
   const [editando, setEditando] = useState(false);
   const [edicao, setEdicao] = useState({});
+  const [tiposServicoEdicao, setTiposServicoEdicao] = useState([]);
   const [salvando, setSalvando] = useState(false);
   const [excluindo, setExcluindo] = useState(false);
   const [motivoExclusao, setMotivoExclusao] = useState("");
@@ -111,6 +112,7 @@ function Conteudo() {
     setMotivoExclusao("");
     setEdicao({
       data: item.data,
+      tipo_servico_id: item.tipo_servico_id,
       orcamento_aprovado: Number(item.orcamento_aprovado),
       valor_pago: Number(item.valor_pago),
       forma_pagamento: item.forma_pagamento === "MÚLTIPLAS" ? "" : item.forma_pagamento || "",
@@ -118,6 +120,12 @@ function Conteudo() {
       bandeira: item.bandeira || "",
       observacoes: item.observacoes || "",
     });
+    supabase
+      .from("tipos_servico")
+      .select("*")
+      .eq("categoria_id", item.categoria_id)
+      .order("nome")
+      .then(({ data }) => setTiposServicoEdicao(data || []));
     setFormasPagamentoEdicao(
       item.formas_pagamento && item.formas_pagamento.length > 0
         ? item.formas_pagamento.map((f) => ({ ...f, id: gerarIdLinhaConsulta() }))
@@ -172,6 +180,7 @@ function Conteudo() {
       .from("lancamentos")
       .update({
         ...(podeEditarData && edicao.data ? { data: edicao.data } : {}),
+        tipo_servico_id: edicao.tipo_servico_id,
         orcamento_aprovado: Number(edicao.orcamento_aprovado) || 0,
         valor_pago: valorPagoEfetivo,
         forma_pagamento: usaMultiplas ? "MÚLTIPLAS" : (Number(edicao.valor_pago) > 0 ? edicao.forma_pagamento : null),
@@ -496,6 +505,19 @@ function Conteudo() {
                   />
                 </div>
               )}
+              <div>
+                <label className="field-label">Tipo de serviço</label>
+                <select
+                  className="field-input"
+                  value={edicao.tipo_servico_id || ""}
+                  onChange={(e) => setEdicao({ ...edicao, tipo_servico_id: e.target.value })}
+                >
+                  <option value="">Selecione</option>
+                  {tiposServicoEdicao.map((t) => (
+                    <option key={t.id} value={t.id}>{t.nome}</option>
+                  ))}
+                </select>
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="field-label">Orçamento aprovado <span className="normal-case text-muted">(opcional)</span></label>

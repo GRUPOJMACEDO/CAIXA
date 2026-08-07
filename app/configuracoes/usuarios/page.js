@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import AppShell from "../../../components/AppShell";
 import Modal from "../../../components/Modal";
-import { Check, Copy, CopyCheck, FileSpreadsheet, Pencil } from "lucide-react";
+import { Check, Copy, CopyCheck, FileSpreadsheet, Pencil, Search, X } from "lucide-react";
 import { supabase } from "../../../lib/supabaseClient";
 import { useSessao } from "../../../lib/SessaoContext";
 import { gerarLogin } from "../../../lib/textoUtil";
@@ -37,6 +37,7 @@ function Conteudo() {
   const [edUnidadeIds, setEdUnidadeIds] = useState([]);
   const [edLinha, setEdLinha] = useState("");
   const [salvandoEdicao, setSalvandoEdicao] = useState(false);
+  const [buscaUsuario, setBuscaUsuario] = useState("");
 
   // Supervisão/Gerência só enxergam e só mexem em usuários das próprias
   // unidades — Administrador/Diretor continuam vendo todo mundo
@@ -50,6 +51,13 @@ function Conteudo() {
   const edAcessoTodas = podeVerTodasUnidades(edCargo);
   const edLimite = limiteUnidadesPorCargo(edCargo);
   const podeEditarUsuario = [CARGOS.SUPERVISAO, CARGOS.GERENCIA, CARGOS.ADMINISTRADOR, CARGOS.DIRETOR].includes(usuario.cargo);
+  const usuariosFiltrados = buscaUsuario.trim()
+    ? usuarios.filter(
+        (u) =>
+          u.nome_completo.toLowerCase().includes(buscaUsuario.trim().toLowerCase()) ||
+          u.login.toLowerCase().includes(buscaUsuario.trim().toLowerCase())
+      )
+    : usuarios;
 
   const acessoTodas = podeVerTodasUnidades(cargo);
   const limite = limiteUnidadesPorCargo(cargo);
@@ -304,8 +312,38 @@ function Conteudo() {
         </div>
       </form>
 
+      <div className="mb-3">
+        <div className="relative max-w-sm">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
+          <input
+            className="field-input pl-8 pr-8"
+            list="lista-nomes-usuarios"
+            placeholder="Buscar por nome…"
+            value={buscaUsuario}
+            onChange={(e) => setBuscaUsuario(e.target.value)}
+          />
+          {buscaUsuario && (
+            <button
+              type="button"
+              onClick={() => setBuscaUsuario("")}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted hover:text-ink transition"
+            >
+              <X size={14} />
+            </button>
+          )}
+          <datalist id="lista-nomes-usuarios">
+            {usuarios.map((u) => (
+              <option key={u.id} value={u.nome_completo} />
+            ))}
+          </datalist>
+        </div>
+        {buscaUsuario && (
+          <p className="text-xs text-muted mt-1">{usuariosFiltrados.length} de {usuarios.length} usuário(s)</p>
+        )}
+      </div>
+
       <div className="card divide-y divide-line">
-        {usuarios.map((u) => (
+        {usuariosFiltrados.map((u) => (
           <div key={u.id} className={`p-3 flex justify-between items-center text-sm ${!u.ativo ? "opacity-50" : ""}`}>
             <span>
               {u.nome_completo} <span className="text-muted font-mono-num">· {u.login}</span>
