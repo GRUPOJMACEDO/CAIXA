@@ -8,7 +8,7 @@ import FormasPagamentoModal from "../../components/FormasPagamentoModal";
 import { supabase } from "../../lib/supabaseClient";
 import { useSessao } from "../../lib/SessaoContext";
 import { hojeBrasil } from "../../lib/fusoHorario";
-import { podeAlterar, podeExcluirLancamento } from "../../lib/permissions";
+import { podeAlterar, podeExcluirLancamento, podeLancarDataRetroativa } from "../../lib/permissions";
 import { iconeCategoria } from "../../lib/iconesCategoria";
 import { formatarDataBR, formatarMoedaSemSimbolo } from "../../lib/formato";
 import { FORMAS_PAGAMENTO, BANDEIRAS, precisaParcelas as precisaParcelasFn, precisaBandeira as precisaBandeiraFn } from "../../lib/formasPagamento";
@@ -56,6 +56,7 @@ function Conteudo() {
   const snapshotEdicaoConsultaRef = useRef(null);
   const mostrarUnidade = unidades.length > 1;
   const podeEditar = podeAlterar(usuario.cargo, usuario.linha);
+  const podeEditarData = podeLancarDataRetroativa(usuario.cargo);
   const podeExcluir = podeExcluirLancamento(usuario.cargo);
 
   useEffect(() => {
@@ -109,6 +110,7 @@ function Conteudo() {
     setExcluindo(false);
     setMotivoExclusao("");
     setEdicao({
+      data: item.data,
       orcamento_aprovado: Number(item.orcamento_aprovado),
       valor_pago: Number(item.valor_pago),
       forma_pagamento: item.forma_pagamento === "MÚLTIPLAS" ? "" : item.forma_pagamento || "",
@@ -169,6 +171,7 @@ function Conteudo() {
     const { error } = await supabase
       .from("lancamentos")
       .update({
+        ...(podeEditarData && edicao.data ? { data: edicao.data } : {}),
         orcamento_aprovado: Number(edicao.orcamento_aprovado) || 0,
         valor_pago: valorPagoEfetivo,
         forma_pagamento: usaMultiplas ? "MÚLTIPLAS" : (Number(edicao.valor_pago) > 0 ? edicao.forma_pagamento : null),
@@ -482,6 +485,17 @@ function Conteudo() {
             </div>
           ) : (
             <div className="space-y-4">
+              {podeEditarData && (
+                <div>
+                  <label className="field-label">Data do lançamento</label>
+                  <input
+                    type="date"
+                    className="field-input"
+                    value={edicao.data || ""}
+                    onChange={(e) => setEdicao({ ...edicao, data: e.target.value })}
+                  />
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="field-label">Orçamento aprovado <span className="normal-case text-muted">(opcional)</span></label>
