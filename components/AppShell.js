@@ -28,11 +28,13 @@ import {
   Cable,
   Receipt,
   DatabaseZap,
+  Briefcase,
 } from "lucide-react";
 import BotaoModoClaroEscuro from "./BotaoModoClaroEscuro";
 import SinoSolicitacoesSenha from "./SinoSolicitacoesSenha";
 import BotaoLinhaToggle from "./BotaoLinhaToggle";
 import BotaoMural from "./BotaoMural";
+import BotaoUsuariosOnline from "./BotaoUsuariosOnline";
 import { SessaoProvider, useSessao } from "../lib/SessaoContext";
 import {
   rotuloCargo,
@@ -143,9 +145,15 @@ function Shell({ children }) {
   const [recolhido, setRecolhido] = useState(false); // painel lateral sempre visível por padrão
   const [secaoAberta, setSecaoAberta] = useState(null);
   const ignorarProximaAutoAbertura = useRef(false);
+  const primeiraCarga = useRef(true);
 
-  // ao navegar, abre automaticamente só a seção onde a página atual está
+  // ao navegar, abre automaticamente só a seção onde a página atual está —
+  // exceto no primeiro carregamento do sistema, que começa sempre fechado
   useEffect(() => {
+    if (primeiraCarga.current) {
+      primeiraCarga.current = false;
+      return;
+    }
     if (ignorarProximaAutoAbertura.current) {
       ignorarProximaAutoAbertura.current = false;
       return;
@@ -185,6 +193,7 @@ function Shell({ children }) {
           <SecaoNav
             titulo="Operação"
             hrefHub="/operacao"
+            icone={Briefcase}
             itens={NAV_OPERACAO}
             pathname={pathname}
             recolhido={recolhido}
@@ -275,6 +284,7 @@ function Shell({ children }) {
           </div>
           <div className="flex items-center gap-4">
             <BotaoLinhaToggle />
+            <BotaoUsuariosOnline />
             <BotaoMural />
             <div className="text-right">
               <p className="text-sm font-medium text-ink leading-tight">{usuario.nome_completo}</p>

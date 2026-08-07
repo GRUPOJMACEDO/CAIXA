@@ -46,17 +46,23 @@ function ConteudoMetas() {
   async function carregar() {
     setCarregando(true);
     if (!linhaFiltro) {
-      // "CI + IH" — busca as duas views e junta, cada unidade podendo
-      // aparecer 2x (uma vez por linha), igual nos outros dashboards
+      // "CI + IH" — busca as duas views e soma os totais por unidade
       const [{ data: ci }, { data: ih }] = await Promise.all([
         supabase.from("vw_painel_tv").select("*"),
         supabase.from("vw_painel_tv_ih").select("*"),
       ]);
-      const combinado = [
-        ...(ci || []).map((u) => ({ ...u, linha: "ci" })),
-        ...(ih || []).map((u) => ({ ...u, linha: "ih" })),
-      ];
-      setUnidadesRanking(combinado);
+      const mapa = new Map();
+      [...(ci || []), ...(ih || [])].forEach((u) => {
+        if (!mapa.has(u.unidade_id)) {
+          mapa.set(u.unidade_id, { unidade_id: u.unidade_id, unidade_nome: u.unidade_nome, linha: null, total_dia: 0, total_semana: 0, total_mes: 0, meta_mes: 0 });
+        }
+        const acc = mapa.get(u.unidade_id);
+        acc.total_dia += Number(u.total_dia);
+        acc.total_semana += Number(u.total_semana);
+        acc.total_mes += Number(u.total_mes);
+        acc.meta_mes += Number(u.meta_mes);
+      });
+      setUnidadesRanking([...mapa.values()]);
     } else {
       const view = linhaFiltro === "ih" ? "vw_painel_tv_ih" : "vw_painel_tv";
       const { data } = await supabase.from(view).select("*");

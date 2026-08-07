@@ -10,6 +10,30 @@ import { useSessao } from "../../../lib/SessaoContext";
 import { CARGOS } from "../../../lib/permissions";
 import { formatarMoedaSemSimbolo, formatarDataBR, mesReferenciaLabel } from "../../../lib/formato";
 
+function mesclarPorAtendenteUnidade(linhas) {
+  const mapa = new Map();
+  linhas.forEach((v) => {
+    const chave = `${v.usuario_id}::${v.unidade_id}`;
+    if (!mapa.has(chave)) {
+      mapa.set(chave, {
+        usuario_id: v.usuario_id,
+        nome_completo: v.nome_completo,
+        unidade_id: v.unidade_id,
+        unidade_nome: v.unidade_nome,
+        linha: null,
+        orcamento_aprovado: 0,
+        valor_pago: 0,
+        qtd_os: 0,
+      });
+    }
+    const acc = mapa.get(chave);
+    acc.orcamento_aprovado += Number(v.orcamento_aprovado);
+    acc.valor_pago += Number(v.valor_pago);
+    acc.qtd_os += Number(v.qtd_os);
+  });
+  return [...mapa.values()];
+}
+
 function inicioMes() {
   const d = new Date();
   return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10);
@@ -43,7 +67,8 @@ function ConteudoVendedores() {
     let query = supabase.from(abaAtual.view).select("*");
     if (linhaFiltro) query = query.eq("linha", linhaFiltro);
     const { data } = await query;
-    const lista = (data || [])
+    const base = linhaFiltro ? data || [] : mesclarPorAtendenteUnidade(data || []);
+    const lista = base
       .map((v) => ({ ...v, falta: Number(v.orcamento_aprovado) - Number(v.valor_pago), premio: Number(v.valor_pago) * 0.05 }))
       .filter((v) => Number(v.valor_pago) > 0 || Number(v.qtd_os) > 0)
       .sort((a, b) => Number(b.valor_pago) - Number(a.valor_pago));
@@ -96,7 +121,7 @@ function ConteudoVendedores() {
     const { data } = await query;
     const mapa = new Map();
     (data || []).forEach((l) => {
-      const chave = `${l.atendente_id}::${l.unidade_id}::${l.linha}`;
+      const chave = `${l.atendente_id}::${l.unidade_id}::${linhaFiltro || "null"}`;
       if (!mapa.has(chave)) mapa.set(chave, []);
       mapa.get(chave).push(l);
     });
@@ -168,9 +193,9 @@ function ConteudoVendedores() {
       .select("id, data, numero_os, orcamento_aprovado, valor_pago, tipos_servico(nome)")
       .eq("unidade_id", linha.unidade_id)
       .eq("atendente_id", linha.usuario_id)
-      .eq("linha", linha.linha)
       .gte("data", inicioMes())
       .order("data", { ascending: false });
+    if (linha.linha) query = query.eq("linha", linha.linha);
 
     if (abaAtual.categoria) {
       const { data: cat } = await supabase.from("categorias").select("id").eq("nome", abaAtual.categoria).single();

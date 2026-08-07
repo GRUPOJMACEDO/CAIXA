@@ -7,6 +7,7 @@ import BotaoAtualizar from "../../../components/BotaoAtualizar";
 import { supabase } from "../../../lib/supabaseClient";
 import { useSessao } from "../../../lib/SessaoContext";
 import { formatarMoedaSemSimbolo, formatarDataBR, mesReferenciaLabel } from "../../../lib/formato";
+import { mesclarPorUnidade } from "../../../lib/agregacaoValores";
 
 function inicioMes() {
   const d = new Date();
@@ -29,7 +30,8 @@ function ConteudoOW() {
     let query = supabase.from("vw_dashboard_ow").select("*");
     if (linhaFiltro) query = query.eq("linha", linhaFiltro);
     const { data } = await query;
-    const lista = (data || []).map((u) => ({ ...u, falta: Number(u.orcamento_aprovado) - Number(u.valor_pago) }));
+    const base = linhaFiltro ? data || [] : mesclarPorUnidade(data || []);
+    const lista = base.map((u) => ({ ...u, falta: Number(u.orcamento_aprovado) - Number(u.valor_pago) }));
     setLinhas(lista);
     setCarregando(false);
   }
@@ -53,9 +55,9 @@ function ConteudoOW() {
       .from("lancamentos")
       .select("id, data, numero_os, orcamento_aprovado, valor_pago, tipos_servico(nome)")
       .eq("unidade_id", unidade.unidade_id)
-      .eq("linha", unidade.linha)
       .gte("data", inicioMes())
       .order("data", { ascending: false });
+    if (unidade.linha) query = query.eq("linha", unidade.linha);
     if (categoriaAcessorio) query = query.neq("categoria_id", categoriaAcessorio.id);
     const { data } = await query;
     setLancamentosDetalhe(data || []);

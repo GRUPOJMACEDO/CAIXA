@@ -54,14 +54,13 @@ function ConteudoDashboard() {
     setDetalhe({ titulo: unidade.unidade_nome, unidadeId: unidade.unidade_id });
     if (!idsAutorizados.has(unidade.unidade_id)) return;
     setCarregandoDetalhe(true);
-    const { data } = await supabase
+    let query = supabase
       .from("lancamentos")
       .select("id, data, numero_os, orcamento_aprovado, valor_pago, tipos_servico(nome)")
-      .eq("unidade_id", unidade.unidade_id)
-      .eq("linha", unidade.linha)
-      .gte("data", semana.inicio)
-      .lte("data", semana.fim)
-      .order("data", { ascending: false });
+      .eq("unidade_id", unidade.unidade_id);
+    if (unidade.linha) query = query.eq("linha", unidade.linha);
+    query = query.gte("data", semana.inicio).lte("data", semana.fim).order("data", { ascending: false });
+    const { data } = await query;
     setLancamentosDetalhe(data || []);
     setCarregandoDetalhe(false);
   }
