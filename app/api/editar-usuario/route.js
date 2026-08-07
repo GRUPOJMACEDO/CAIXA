@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin } from "../../../lib/supabaseAdmin";
 import { gerarLogin } from "../../../lib/textoUtil";
 
-const CARGOS_PODEM_EDITAR = ["administrador", "diretor"];
+const CARGOS_PODEM_EDITAR = ["administrador", "diretor", "supervisao", "gerencia"];
 
 async function usuarioAutenticado(request, admin) {
   const token = request.headers.get("authorization")?.replace("Bearer ", "");
@@ -22,6 +22,26 @@ export async function POST(request) {
     }
 
     const { usuarioId, nome, sobrenome, cargo, unidadeIds, linha } = await request.json();
+
+    if (["supervisao", "gerencia"].includes(chamador.cargo)) {
+      if (["administrador", "diretor", "adm"].includes(cargo)) {
+        return NextResponse.json({ erro: "Você não pode atribuir esse cargo." }, { status: 403 });
+      }
+      const { data: minhasUnidades } = await admin.from("usuario_unidades").select("unidade_id").eq("usuario_id", chamador.id);
+      const idsPermitidos = new Set((minhasUnidades || []).map((u) => u.unidade_id));
+
+      const { data: unidadesDoAlvo } = await admin.from("usuario_unidades").select("unidade_id").eq("usuario_id", usuarioId);
+      const alvoNoEscopo = (unidadesDoAlvo || []).some((u) => idsPermitidos.has(u.unidade_id));
+      if (!alvoNoEscopo) {
+        return NextResponse.json({ erro: "Esse usuário não é de uma unidade que você administra." }, { status: 403 });
+      }
+
+      const foraDoEscopo = (unidadeIds || []).some((id) => !idsPermitidos.has(id));
+      if (foraDoEscopo || !unidadeIds?.length) {
+        return NextResponse.json({ erro: "Você só pode atribuir unidades que você mesmo tem acesso." }, { status: 403 });
+      }
+    }
+
     const login = gerarLogin(nome, sobrenome);
     const email = `${login}@jmacedo.internal`;
 

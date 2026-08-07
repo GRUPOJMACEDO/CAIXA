@@ -19,7 +19,7 @@ import {
 const SENHA_PADRAO = "jmacedo001";
 
 function Conteudo() {
-  const { usuario } = useSessao();
+  const { usuario, unidades: minhasUnidades } = useSessao();
   const [usuarios, setUsuarios] = useState([]);
   const [unidades, setUnidades] = useState([]);
 
@@ -38,16 +38,40 @@ function Conteudo() {
   const [edLinha, setEdLinha] = useState("");
   const [salvandoEdicao, setSalvandoEdicao] = useState(false);
 
+  // Supervisão/Gerência só enxergam e só mexem em usuários das próprias
+  // unidades — Administrador/Diretor continuam vendo todo mundo
+  const souGestorLimitado = [CARGOS.SUPERVISAO, CARGOS.GERENCIA].includes(usuario.cargo);
+  const minhasUnidadesIds = minhasUnidades.map((u) => u.id);
+  const unidadesSelecionaveis = souGestorLimitado ? unidades.filter((u) => minhasUnidadesIds.includes(u.id)) : unidades;
+  const cargosAtribuiveis = souGestorLimitado
+    ? Object.values(CARGOS).filter((c) => ![CARGOS.ADM, CARGOS.ADMINISTRADOR, CARGOS.DIRETOR].includes(c))
+    : Object.values(CARGOS);
+
   const edAcessoTodas = podeVerTodasUnidades(edCargo);
   const edLimite = limiteUnidadesPorCargo(edCargo);
-  const podeEditarUsuario = [CARGOS.ADMINISTRADOR, CARGOS.DIRETOR].includes(usuario.cargo);
+  const podeEditarUsuario = [CARGOS.SUPERVISAO, CARGOS.GERENCIA, CARGOS.ADMINISTRADOR, CARGOS.DIRETOR].includes(usuario.cargo);
 
   const acessoTodas = podeVerTodasUnidades(cargo);
   const limite = limiteUnidadesPorCargo(cargo);
 
   async function carregar() {
-    const { data: us } = await supabase.from("usuarios").select("*").order("nome_completo");
-    setUsuarios(us || []);
+    if (souGestorLimitado) {
+      if (minhasUnidadesIds.length === 0) {
+        setUsuarios([]);
+      } else {
+        const { data: vinculos } = await supabase.from("usuario_unidades").select("usuario_id").in("unidade_id", minhasUnidadesIds);
+        const idsPermitidos = [...new Set((vinculos || []).map((v) => v.usuario_id))];
+        if (idsPermitidos.length === 0) {
+          setUsuarios([]);
+        } else {
+          const { data: us } = await supabase.from("usuarios").select("*").in("id", idsPermitidos).order("nome_completo");
+          setUsuarios(us || []);
+        }
+      }
+    } else {
+      const { data: us } = await supabase.from("usuarios").select("*").order("nome_completo");
+      setUsuarios(us || []);
+    }
     const { data: uns } = await supabase.from("unidades").select("*").order("nome");
     setUnidades(uns || []);
   }
@@ -214,7 +238,7 @@ function Conteudo() {
           <div>
             <label className="field-label">Cargo</label>
             <select className="field-input" value={cargo} onChange={(e) => setCargo(e.target.value)}>
-              {Object.values(CARGOS).map((c) => (
+              {cargosAtribuiveis.map((c) => (
                 <option key={c} value={c}>{CARGO_LABELS[c]}</option>
               ))}
             </select>
@@ -249,7 +273,7 @@ function Conteudo() {
                   : "Marque uma ou mais lojas — para gerentes que cuidam de várias unidades."}
               </p>
               <div className="grid grid-cols-3 gap-2">
-                {unidades.map((u) => {
+                {unidadesSelecionaveis.map((u) => {
                   const marcado = unidadeIds.includes(u.id);
                   return (
                     <label key={u.id} className={`checkbox-tile ${marcado ? "is-checked" : ""}`}>
@@ -367,7 +391,7 @@ function Conteudo() {
             <div>
               <label className="field-label">Cargo</label>
               <select className="field-input" value={edCargo} onChange={(e) => setEdCargo(e.target.value)}>
-                {Object.values(CARGOS).map((c) => (
+                {cargosAtribuiveis.map((c) => (
                   <option key={c} value={c}>{CARGO_LABELS[c]}</option>
                 ))}
               </select>
@@ -390,7 +414,7 @@ function Conteudo() {
                 </p>
               ) : (
                 <div className="grid grid-cols-3 gap-2 max-h-52 overflow-y-auto">
-                  {unidades.map((u) => {
+                  {unidadesSelecionaveis.map((u) => {
                     const marcado = edUnidadeIds.includes(u.id);
                     return (
                       <label key={u.id} className={`checkbox-tile ${marcado ? "is-checked" : ""}`}>

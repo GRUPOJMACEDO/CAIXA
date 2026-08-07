@@ -22,6 +22,16 @@ export async function POST(request) {
 
     const { usuarioId, bloquear } = await request.json();
 
+    if (chamador.cargo === "gerencia") {
+      const { data: minhasUnidades } = await admin.from("usuario_unidades").select("unidade_id").eq("usuario_id", chamador.id);
+      const idsPermitidos = new Set((minhasUnidades || []).map((u) => u.unidade_id));
+      const { data: unidadesDoAlvo } = await admin.from("usuario_unidades").select("unidade_id").eq("usuario_id", usuarioId);
+      const alvoNoEscopo = (unidadesDoAlvo || []).some((u) => idsPermitidos.has(u.unidade_id));
+      if (!alvoNoEscopo) {
+        return NextResponse.json({ erro: "Esse usuário não é de uma unidade que você administra." }, { status: 403 });
+      }
+    }
+
     const { error: erroAuth } = await admin.auth.admin.updateUserById(usuarioId, {
       ban_duration: bloquear ? "876000h" : "none",
     });

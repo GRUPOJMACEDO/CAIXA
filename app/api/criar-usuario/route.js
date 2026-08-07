@@ -24,6 +24,19 @@ export async function POST(request) {
     }
 
     const { nome, sobrenome, cargo, unidadeIds, linha } = await request.json();
+
+    if (["supervisao", "gerencia"].includes(chamador.cargo)) {
+      if (["administrador", "diretor", "adm"].includes(cargo)) {
+        return NextResponse.json({ erro: "Você não pode criar um usuário com esse cargo." }, { status: 403 });
+      }
+      const { data: minhasUnidades } = await admin.from("usuario_unidades").select("unidade_id").eq("usuario_id", chamador.id);
+      const idsPermitidos = new Set((minhasUnidades || []).map((u) => u.unidade_id));
+      const foraDoEscopo = (unidadeIds || []).some((id) => !idsPermitidos.has(id));
+      if (foraDoEscopo || !unidadeIds?.length) {
+        return NextResponse.json({ erro: "Você só pode atribuir unidades que você mesmo tem acesso." }, { status: 403 });
+      }
+    }
+
     const login = gerarLogin(nome, sobrenome);
     const email = `${login}@jmacedo.internal`;
 

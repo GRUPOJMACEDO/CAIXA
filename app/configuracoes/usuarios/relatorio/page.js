@@ -29,17 +29,24 @@ function paraCSV(unidades, usuariosPorUnidade, acessoGlobal) {
 }
 
 function Conteudo() {
-  const { usuario } = useSessao();
+  const { usuario, unidades: minhasUnidades } = useSessao();
   const [unidades, setUnidades] = useState([]);
   const [usuariosPorUnidade, setUsuariosPorUnidade] = useState({});
   const [acessoGlobal, setAcessoGlobal] = useState([]);
   const [carregando, setCarregando] = useState(true);
 
+  const souGestorLimitado = [CARGOS.SUPERVISAO, CARGOS.GERENCIA].includes(usuario.cargo);
+  const minhasUnidadesIds = minhasUnidades.map((u) => u.id);
+
   useEffect(() => {
     (async () => {
-      const { data: uns } = await supabase.from("unidades").select("*").eq("ativo", true).order("nome");
+      const { data: unsTodas } = await supabase.from("unidades").select("*").eq("ativo", true).order("nome");
+      const uns = souGestorLimitado ? (unsTodas || []).filter((u) => minhasUnidadesIds.includes(u.id)) : unsTodas;
       const { data: todosUsuarios } = await supabase.from("usuarios").select("*").order("nome_completo");
-      const { data: vinculos } = await supabase.from("usuario_unidades").select("usuario_id, unidade_id");
+      const { data: vinculosTodos } = await supabase.from("usuario_unidades").select("usuario_id, unidade_id");
+      const vinculos = souGestorLimitado
+        ? (vinculosTodos || []).filter((v) => minhasUnidadesIds.includes(v.unidade_id))
+        : vinculosTodos;
 
       const mapaUsuarios = Object.fromEntries((todosUsuarios || []).map((u) => [u.id, u]));
       const porUnidade = {};
@@ -50,14 +57,16 @@ function Conteudo() {
       });
       Object.keys(porUnidade).forEach((id) => (porUnidade[id] = ordenar(porUnidade[id])));
 
-      const global = ordenar((todosUsuarios || []).filter((u) => u.cargo === CARGOS.ADMINISTRADOR || u.cargo === CARGOS.DIRETOR));
+      const global = souGestorLimitado
+        ? []
+        : ordenar((todosUsuarios || []).filter((u) => u.cargo === CARGOS.ADMINISTRADOR || u.cargo === CARGOS.DIRETOR));
 
       setUnidades(uns || []);
       setUsuariosPorUnidade(porUnidade);
       setAcessoGlobal(global);
       setCarregando(false);
     })();
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   function exportar() {
     const csv = "\uFEFF" + paraCSV(unidades, usuariosPorUnidade, acessoGlobal);
