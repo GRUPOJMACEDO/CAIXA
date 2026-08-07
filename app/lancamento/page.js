@@ -66,7 +66,7 @@ function FormularioLancamento() {
   const [mensagem, setMensagem] = useState(null);
   const [salvando, setSalvando] = useState(false);
 
-  const dataEditavel = podeLancarDataRetroativa(usuario.cargo);
+  const dataEditavel = podeLancarDataRetroativa(usuario.cargo, usuario.linha);
   const precisaParcelasUnica = precisaParcelasFn(formaPagamento);
   const precisaBandeiraUnica = precisaBandeiraFn(formaPagamento);
   const usaMultiplasFormas = formasPagamento.length > 0;
