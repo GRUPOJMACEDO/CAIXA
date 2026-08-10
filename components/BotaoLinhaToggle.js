@@ -1,9 +1,10 @@
 "use client";
-import { Layers, Store, Home } from "lucide-react";
+import { Layers, Rows3, Store, Home } from "lucide-react";
 import { useSessao } from "../lib/SessaoContext";
 
 const OPCOES = [
   { valor: "todos", rotulo: "CI + IH", icone: Layers },
+  { valor: "todos-detalhado", rotulo: "Detalhado", icone: Rows3 },
   { valor: "ci", rotulo: "CI", icone: Store },
   { valor: "ih", rotulo: "IH", icone: Home },
 ];
@@ -12,9 +13,11 @@ const OPCOES = [
  * Seletor de linha de operação, visível só para gestão com acesso a
  * mais de uma unidade, sendo pelo menos uma delas IH.
  *
- * CI + IH → tudo junto, cada unidade em sua própria linha na tabela.
- * CI      → só atendimento de balcão.
- * IH      → só atendimento in-home.
+ * CI + IH   → tudo junto, somado numa linha só por unidade.
+ * Detalhado → tudo junto, mas CI e IH aparecem em linhas separadas
+ *             (a mesma unidade pode aparecer 2x na tabela).
+ * CI        → só atendimento de balcão.
+ * IH        → só atendimento in-home.
  */
 export default function BotaoLinhaToggle() {
   const { podeAlternarLinha, modoLinha, definirModoLinha } = useSessao();

@@ -17,7 +17,7 @@ function inicioMes() {
 const MEDALHA = ["text-gold", "text-prata", "text-bronze"];
 
 function ConteudoOW() {
-  const { unidades, linhaFiltro, marcasFiltro } = useSessao();
+  const { unidades, linhaFiltro, marcasFiltro, detalharLinha } = useSessao();
   const [linhas, setLinhas] = useState([]);
   const [lancamentosDetalhe, setLancamentosDetalhe] = useState([]);
   const [carregando, setCarregando] = useState(true);
@@ -30,7 +30,7 @@ function ConteudoOW() {
     let query = supabase.from("vw_dashboard_ow").select("*");
     if (linhaFiltro) query = query.eq("linha", linhaFiltro);
     const { data } = await query;
-    const base = filtrarPorMarca(linhaFiltro ? data || [] : mesclarPorUnidade(data || []), marcasFiltro);
+    const base = filtrarPorMarca(linhaFiltro || detalharLinha ? data || [] : mesclarPorUnidade(data || []), marcasFiltro);
     const lista = base.map((u) => ({ ...u, falta: Number(u.orcamento_aprovado) - Number(u.valor_pago) }));
     setLinhas(lista);
     setCarregando(false);
@@ -38,7 +38,7 @@ function ConteudoOW() {
 
   useEffect(() => {
     carregar();
-  }, [linhaFiltro, marcasFiltro]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [linhaFiltro, marcasFiltro, detalharLinha]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const totalPago = linhas.reduce((s, l) => s + Number(l.valor_pago), 0);
   const totalOrcamento = linhas.reduce((s, l) => s + Number(l.orcamento_aprovado), 0);

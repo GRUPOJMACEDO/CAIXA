@@ -20,7 +20,7 @@ function diaSeguinte(dataIso) {
 const MEDALHA = ["text-gold", "text-prata", "text-bronze"];
 
 function ConteudoDashboard() {
-  const { unidades, linhaFiltro, marcasFiltro } = useSessao();
+  const { unidades, linhaFiltro, marcasFiltro, detalharLinha } = useSessao();
   const [dataSelecionada, setDataSelecionada] = useState(hojeBrasil());
   const [linhas, setLinhas] = useState([]);
   const [lancamentosDetalhe, setLancamentosDetalhe] = useState([]);
@@ -33,7 +33,7 @@ function ConteudoDashboard() {
 
   async function carregar() {
     setCarregando(true);
-    const dados = filtrarPorMarca(await buscarValoresPorPeriodo(supabase, dataSelecionada, diaSeguinte(dataSelecionada), linhaFiltro), marcasFiltro);
+    const dados = filtrarPorMarca(await buscarValoresPorPeriodo(supabase, dataSelecionada, diaSeguinte(dataSelecionada), linhaFiltro, detalharLinha), marcasFiltro);
     const lista = dados.map((u) => ({ ...u, falta: Number(u.orcamento_aprovado) - Number(u.valor_pago) }));
     setLinhas(lista);
     setCarregando(false);
@@ -41,7 +41,7 @@ function ConteudoDashboard() {
 
   useEffect(() => {
     carregar();
-  }, [linhaFiltro, marcasFiltro, dataSelecionada]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [linhaFiltro, marcasFiltro, detalharLinha, dataSelecionada]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const totalPago = linhas.reduce((s, l) => s + Number(l.valor_pago), 0);
   const totalOrcamento = linhas.reduce((s, l) => s + Number(l.orcamento_aprovado), 0);

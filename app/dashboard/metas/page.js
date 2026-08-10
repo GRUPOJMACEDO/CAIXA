@@ -40,30 +40,39 @@ function BandeiraQuadriculada({ size = 14 }) {
 }
 
 function ConteudoMetas() {
-  const { linhaFiltro, marcasFiltro } = useSessao();
+  const { linhaFiltro, marcasFiltro, detalharLinha } = useSessao();
   const [unidadesRanking, setUnidadesRanking] = useState([]);
   const [carregando, setCarregando] = useState(true);
 
   async function carregar() {
     setCarregando(true);
     if (!linhaFiltro) {
-      // "CI + IH" — busca as duas views e soma os totais por unidade
       const [{ data: ci }, { data: ih }] = await Promise.all([
         supabase.from("vw_painel_tv").select("*"),
         supabase.from("vw_painel_tv_ih").select("*"),
       ]);
-      const mapa = new Map();
-      [...(ci || []), ...(ih || [])].forEach((u) => {
-        if (!mapa.has(u.unidade_id)) {
-          mapa.set(u.unidade_id, { unidade_id: u.unidade_id, unidade_nome: u.unidade_nome, linha: null, total_dia: 0, total_semana: 0, total_mes: 0, meta_mes: 0 });
-        }
-        const acc = mapa.get(u.unidade_id);
-        acc.total_dia += Number(u.total_dia);
-        acc.total_semana += Number(u.total_semana);
-        acc.total_mes += Number(u.total_mes);
-        acc.meta_mes += Number(u.meta_mes);
-      });
-      setUnidadesRanking(filtrarPorMarca([...mapa.values()], marcasFiltro));
+      if (detalharLinha) {
+        // "Detalhado" — CI e IH aparecem como linhas separadas, sem somar
+        const combinado = [
+          ...(ci || []).map((u) => ({ ...u, linha: "ci" })),
+          ...(ih || []).map((u) => ({ ...u, linha: "ih" })),
+        ];
+        setUnidadesRanking(filtrarPorMarca(combinado, marcasFiltro));
+      } else {
+        // "CI + IH" — soma os totais por unidade numa linha só
+        const mapa = new Map();
+        [...(ci || []), ...(ih || [])].forEach((u) => {
+          if (!mapa.has(u.unidade_id)) {
+            mapa.set(u.unidade_id, { unidade_id: u.unidade_id, unidade_nome: u.unidade_nome, linha: null, total_dia: 0, total_semana: 0, total_mes: 0, meta_mes: 0 });
+          }
+          const acc = mapa.get(u.unidade_id);
+          acc.total_dia += Number(u.total_dia);
+          acc.total_semana += Number(u.total_semana);
+          acc.total_mes += Number(u.total_mes);
+          acc.meta_mes += Number(u.meta_mes);
+        });
+        setUnidadesRanking(filtrarPorMarca([...mapa.values()], marcasFiltro));
+      }
     } else {
       const view = linhaFiltro === "ih" ? "vw_painel_tv_ih" : "vw_painel_tv";
       const { data } = await supabase.from(view).select("*");
@@ -74,7 +83,7 @@ function ConteudoMetas() {
 
   useEffect(() => {
     carregar();
-  }, [linhaFiltro, marcasFiltro]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [linhaFiltro, marcasFiltro, detalharLinha]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const comMeta = unidadesRanking.map((u) => ({
     ...u,

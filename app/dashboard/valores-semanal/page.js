@@ -20,7 +20,7 @@ function diaSeguinte(dataIso) {
 const MEDALHA = ["text-gold", "text-prata", "text-bronze"];
 
 function ConteudoDashboard() {
-  const { unidades, linhaFiltro, marcasFiltro } = useSessao();
+  const { unidades, linhaFiltro, marcasFiltro, detalharLinha } = useSessao();
   const semanas = listaSemanasRecentes(16);
   const [semanaSelecionada, setSemanaSelecionada] = useState(semanas[0].valor);
   const [linhas, setLinhas] = useState([]);
@@ -34,7 +34,7 @@ function ConteudoDashboard() {
 
   async function carregar() {
     setCarregando(true);
-    const dados = filtrarPorMarca(await buscarValoresPorPeriodo(supabase, semana.inicio, diaSeguinte(semana.fim), linhaFiltro), marcasFiltro);
+    const dados = filtrarPorMarca(await buscarValoresPorPeriodo(supabase, semana.inicio, diaSeguinte(semana.fim), linhaFiltro, detalharLinha), marcasFiltro);
     const lista = dados.map((u) => ({ ...u, falta: Number(u.orcamento_aprovado) - Number(u.valor_pago) }));
     setLinhas(lista);
     setCarregando(false);
@@ -42,7 +42,7 @@ function ConteudoDashboard() {
 
   useEffect(() => {
     carregar();
-  }, [linhaFiltro, marcasFiltro, semanaSelecionada]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [linhaFiltro, marcasFiltro, detalharLinha, semanaSelecionada]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const totalPago = linhas.reduce((s, l) => s + Number(l.valor_pago), 0);
   const totalOrcamento = linhas.reduce((s, l) => s + Number(l.orcamento_aprovado), 0);
