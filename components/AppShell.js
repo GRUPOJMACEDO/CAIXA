@@ -33,6 +33,7 @@ import {
 import BotaoModoClaroEscuro from "./BotaoModoClaroEscuro";
 import SinoSolicitacoesSenha from "./SinoSolicitacoesSenha";
 import BotaoLinhaToggle from "./BotaoLinhaToggle";
+import BotaoFiltroMarca from "./BotaoFiltroMarca";
 import BotaoMural from "./BotaoMural";
 import BotaoUsuariosOnline from "./BotaoUsuariosOnline";
 import { SessaoProvider, useSessao } from "../lib/SessaoContext";
@@ -96,7 +97,7 @@ function ItemNav({ item, ativo, recolhido }) {
   );
 }
 
-function SecaoNav({ titulo, hrefHub, icone: Icone, itens, pathname, recolhido, aberta, onToggle }) {
+function SecaoNav({ titulo, hrefHub, icone: Icone, itens, pathname, recolhido, aberta, onToggle, aoClicarNome }) {
   if (recolhido) {
     return (
       <div className="space-y-0.5">
@@ -111,6 +112,7 @@ function SecaoNav({ titulo, hrefHub, icone: Icone, itens, pathname, recolhido, a
       <div className="flex items-center justify-between px-3 mb-2">
         <Link
           href={hrefHub}
+          onClick={aoClicarNome}
           className="text-[11px] uppercase tracking-wider flex items-center gap-1.5 transition font-bold"
           style={{ color: "#1B3A5C" }}
         >
@@ -199,6 +201,7 @@ function Shell({ children }) {
             recolhido={recolhido}
             aberta={secaoAberta === "operacao"}
             onToggle={() => setSecaoAberta((s) => (s === "operacao" ? null : "operacao"))}
+            aoClicarNome={() => setSecaoAberta("operacao")}
           />
 
           <SecaoNav
@@ -210,6 +213,7 @@ function Shell({ children }) {
             recolhido={recolhido}
             aberta={secaoAberta === "dashboard"}
             onToggle={() => setSecaoAberta((s) => (s === "dashboard" ? null : "dashboard"))}
+            aoClicarNome={() => setSecaoAberta("dashboard")}
           />
 
           {temAcessoConfiguracoes(usuario.cargo) && (
@@ -222,6 +226,7 @@ function Shell({ children }) {
               recolhido={recolhido}
               aberta={secaoAberta === "configuracoes"}
               onToggle={() => setSecaoAberta((s) => (s === "configuracoes" ? null : "configuracoes"))}
+              aoClicarNome={() => setSecaoAberta("configuracoes")}
             />
           )}
 
@@ -284,6 +289,7 @@ function Shell({ children }) {
           </div>
           <div className="flex items-center gap-4">
             <BotaoLinhaToggle />
+            <BotaoFiltroMarca />
             <BotaoUsuariosOnline />
             <BotaoMural />
             <div className="text-right">

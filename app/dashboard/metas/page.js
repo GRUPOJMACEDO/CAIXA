@@ -5,6 +5,7 @@ import AppShell from "../../../components/AppShell";
 import BotaoAtualizar from "../../../components/BotaoAtualizar";
 import { supabase } from "../../../lib/supabaseClient";
 import { useSessao } from "../../../lib/SessaoContext";
+import { filtrarPorMarca } from "../../../lib/agregacaoValores";
 
 const MEDALHAS = [
   { cor: "border-gold bg-gold-soft/50", texto: "text-gold-strong", rotulo: "1º lugar · ouro", barra: "#B8862E" },
@@ -39,7 +40,7 @@ function BandeiraQuadriculada({ size = 14 }) {
 }
 
 function ConteudoMetas() {
-  const { linhaFiltro } = useSessao();
+  const { linhaFiltro, marcasFiltro } = useSessao();
   const [unidadesRanking, setUnidadesRanking] = useState([]);
   const [carregando, setCarregando] = useState(true);
 
@@ -62,18 +63,18 @@ function ConteudoMetas() {
         acc.total_mes += Number(u.total_mes);
         acc.meta_mes += Number(u.meta_mes);
       });
-      setUnidadesRanking([...mapa.values()]);
+      setUnidadesRanking(filtrarPorMarca([...mapa.values()], marcasFiltro));
     } else {
       const view = linhaFiltro === "ih" ? "vw_painel_tv_ih" : "vw_painel_tv";
       const { data } = await supabase.from(view).select("*");
-      setUnidadesRanking((data || []).map((u) => ({ ...u, linha: linhaFiltro })));
+      setUnidadesRanking(filtrarPorMarca((data || []).map((u) => ({ ...u, linha: linhaFiltro })), marcasFiltro));
     }
     setCarregando(false);
   }
 
   useEffect(() => {
     carregar();
-  }, [linhaFiltro]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [linhaFiltro, marcasFiltro]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const comMeta = unidadesRanking.map((u) => ({
     ...u,

@@ -9,6 +9,7 @@ import { supabase } from "../../../lib/supabaseClient";
 import { useSessao } from "../../../lib/SessaoContext";
 import { CARGOS } from "../../../lib/permissions";
 import { formatarMoedaSemSimbolo, formatarDataBR, mesReferenciaLabel } from "../../../lib/formato";
+import { filtrarPorMarca } from "../../../lib/agregacaoValores";
 
 function mesclarPorAtendenteUnidade(linhas) {
   const mapa = new Map();
@@ -48,7 +49,7 @@ const ABAS = [
 ];
 
 function ConteudoVendedores() {
-  const { usuario, unidades, linhaFiltro } = useSessao();
+  const { usuario, unidades, linhaFiltro, marcasFiltro } = useSessao();
   const [aba, setAba] = useState("orcamentos");
   const [linhas, setLinhas] = useState([]);
   const [carregando, setCarregando] = useState(true);
@@ -67,7 +68,7 @@ function ConteudoVendedores() {
     let query = supabase.from(abaAtual.view).select("*");
     if (linhaFiltro) query = query.eq("linha", linhaFiltro);
     const { data } = await query;
-    const base = linhaFiltro ? data || [] : mesclarPorAtendenteUnidade(data || []);
+    const base = filtrarPorMarca(linhaFiltro ? data || [] : mesclarPorAtendenteUnidade(data || []), marcasFiltro);
     const lista = base
       .map((v) => ({ ...v, falta: Number(v.orcamento_aprovado) - Number(v.valor_pago), premio: Number(v.valor_pago) * 0.05 }))
       .filter((v) => Number(v.valor_pago) > 0 || Number(v.qtd_os) > 0)
@@ -78,7 +79,7 @@ function ConteudoVendedores() {
 
   useEffect(() => {
     carregar();
-  }, [aba, linhaFiltro]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [aba, linhaFiltro, marcasFiltro]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const mapaUnidades = new Map();
   linhas.forEach((l) => mapaUnidades.set(l.unidade_id, l.unidade_nome));

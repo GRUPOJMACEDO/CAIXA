@@ -9,7 +9,7 @@ import { supabase } from "../../../lib/supabaseClient";
 import { useSessao } from "../../../lib/SessaoContext";
 import { formatarMoedaSemSimbolo, formatarDataBR } from "../../../lib/formato";
 import { hojeBrasil } from "../../../lib/fusoHorario";
-import { buscarValoresPorPeriodo } from "../../../lib/agregacaoValores";
+import { buscarValoresPorPeriodo, filtrarPorMarca } from "../../../lib/agregacaoValores";
 
 function diaSeguinte(dataIso) {
   const d = new Date(dataIso + "T12:00:00");
@@ -20,7 +20,7 @@ function diaSeguinte(dataIso) {
 const MEDALHA = ["text-gold", "text-prata", "text-bronze"];
 
 function ConteudoDashboard() {
-  const { unidades, linhaFiltro } = useSessao();
+  const { unidades, linhaFiltro, marcasFiltro } = useSessao();
   const [dataSelecionada, setDataSelecionada] = useState(hojeBrasil());
   const [linhas, setLinhas] = useState([]);
   const [lancamentosDetalhe, setLancamentosDetalhe] = useState([]);
@@ -33,7 +33,7 @@ function ConteudoDashboard() {
 
   async function carregar() {
     setCarregando(true);
-    const dados = await buscarValoresPorPeriodo(supabase, dataSelecionada, diaSeguinte(dataSelecionada), linhaFiltro);
+    const dados = filtrarPorMarca(await buscarValoresPorPeriodo(supabase, dataSelecionada, diaSeguinte(dataSelecionada), linhaFiltro), marcasFiltro);
     const lista = dados.map((u) => ({ ...u, falta: Number(u.orcamento_aprovado) - Number(u.valor_pago) }));
     setLinhas(lista);
     setCarregando(false);
@@ -41,7 +41,7 @@ function ConteudoDashboard() {
 
   useEffect(() => {
     carregar();
-  }, [linhaFiltro, dataSelecionada]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [linhaFiltro, marcasFiltro, dataSelecionada]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const totalPago = linhas.reduce((s, l) => s + Number(l.valor_pago), 0);
   const totalOrcamento = linhas.reduce((s, l) => s + Number(l.orcamento_aprovado), 0);

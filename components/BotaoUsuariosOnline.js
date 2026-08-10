@@ -66,15 +66,18 @@ export default function BotaoUsuariosOnline() {
       <button
         onClick={() => setAberto((v) => !v)}
         title="Usuários online agora"
-        className="relative flex items-center gap-1.5 text-muted hover:text-gold transition"
+        className="relative text-muted hover:text-gold transition"
       >
         <Users size={19} />
-        {!carregandoInicial && (
-          <span className="text-xs font-semibold text-ink font-mono-num">{online.length}</span>
-        )}
         {!carregandoInicial && online.length > 0 && (
-          <span className="absolute -top-1 -right-2">
-            <BolinhaOnline size={9} />
+          <span
+            className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-1 rounded-full text-white text-[10px] font-semibold flex items-center justify-center"
+            style={{
+              background: "radial-gradient(circle at 35% 30%, #6EE7A8, #16A34A 65%, #0F7A38)",
+              boxShadow: "0 1px 2px rgba(0,0,0,0.35), inset 0 1px 1px rgba(255,255,255,0.6), 0 0 0 2px white",
+            }}
+          >
+            {online.length > 99 ? "99+" : online.length}
           </span>
         )}
       </button>
