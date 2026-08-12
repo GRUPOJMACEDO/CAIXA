@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { Pencil } from "lucide-react";
+import { Save } from "lucide-react";
 import AppShell from "../../../components/AppShell";
 import { supabase } from "../../../lib/supabaseClient";
 import { useSessao } from "../../../lib/SessaoContext";
@@ -14,6 +14,8 @@ function Conteudo() {
   const [atendeCiNova, setAtendeCiNova] = useState(true);
   const [atendeIhNova, setAtendeIhNova] = useState(false);
   const [edicoes, setEdicoes] = useState({}); // { unidadeId: { nome, codigo, atende_ci, atende_ih } }
+  const [salvos, setSalvos] = useState({});
+  const [salvandoTodas, setSalvandoTodas] = useState(false);
 
   async function carregar() {
     const { data } = await supabase.from("unidades").select("*").order("nome");
@@ -44,7 +46,28 @@ function Conteudo() {
       .from("unidades")
       .update({ nome: novoNome, codigo: novoCodigo, atende_ci: novoAtendeCi, atende_ih: novoAtendeIh })
       .eq("id", unidade.id);
-    carregar();
+    setEdicoes((atual) => {
+      const { [unidade.id]: _removida, ...resto } = atual;
+      return resto;
+    });
+    setSalvos((s) => ({ ...s, [unidade.id]: true }));
+    await carregar();
+  }
+
+  async function salvarTodas() {
+    const idsAlterados = Object.keys(edicoes);
+    if (idsAlterados.length === 0) return;
+    setSalvandoTodas(true);
+    for (const id of idsAlterados) {
+      const unidade = unidades.find((u) => u.id === id);
+      if (unidade) await salvarAlteracao(unidade);
+    }
+    setSalvandoTodas(false);
+  }
+
+  function atualizarEdicao(id, campo, valor) {
+    setEdicoes((atual) => ({ ...atual, [id]: { ...atual[id], [campo]: valor } }));
+    setSalvos((s) => ({ ...s, [id]: false }));
   }
 
   const permitido = podeConfigUnidades(usuario.cargo);
@@ -82,14 +105,25 @@ function Conteudo() {
         <p className="text-sm text-muted mb-4">Somente o Administrador cadastra e altera unidades.</p>
       )}
 
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-xs text-muted">{Object.keys(edicoes).length > 0 ? `${Object.keys(edicoes).length} unidade(s) com alteração pendente` : ""}</p>
+        {permitido && Object.keys(edicoes).length > 0 && (
+          <button className="btn-primary flex items-center gap-1.5 text-sm" onClick={salvarTodas} disabled={salvandoTodas}>
+            <Save size={14} /> {salvandoTodas ? "Salvando…" : "Salvar todas as alterações"}
+          </button>
+        )}
+      </div>
+
       <div className="card divide-y divide-line">
-        {unidades.map((u) => (
+        {unidades.map((u) => {
+          const temEdicao = !!edicoes[u.id];
+          return (
           <div key={u.id} className="p-3 flex items-center justify-between gap-3 text-sm">
             {permitido ? (
               <input
                 className="field-input flex-1"
                 value={edicoes[u.id]?.nome ?? u.nome}
-                onChange={(e) => setEdicoes({ ...edicoes, [u.id]: { ...edicoes[u.id], nome: e.target.value } })}
+                onChange={(e) => atualizarEdicao(u.id, "nome", e.target.value)}
               />
             ) : (
               <span>{u.nome}</span>
@@ -100,24 +134,30 @@ function Conteudo() {
                   <input
                     type="checkbox"
                     checked={edicoes[u.id]?.atende_ci ?? u.atende_ci}
-                    onChange={(e) => setEdicoes({ ...edicoes, [u.id]: { ...edicoes[u.id], atende_ci: e.target.checked } })}
+                    onChange={(e) => atualizarEdicao(u.id, "atende_ci", e.target.checked)}
                   /> CI
                 </label>
                 <label className="flex items-center gap-1 text-xs text-muted">
                   <input
                     type="checkbox"
                     checked={edicoes[u.id]?.atende_ih ?? u.atende_ih}
-                    onChange={(e) => setEdicoes({ ...edicoes, [u.id]: { ...edicoes[u.id], atende_ih: e.target.checked } })}
+                    onChange={(e) => atualizarEdicao(u.id, "atende_ih", e.target.checked)}
                   /> IH
                 </label>
                 <input
                   className="field-input w-24"
                   maxLength={7}
                   value={edicoes[u.id]?.codigo ?? u.codigo}
-                  onChange={(e) => setEdicoes({ ...edicoes, [u.id]: { ...edicoes[u.id], codigo: e.target.value.toUpperCase() } })}
+                  onChange={(e) => atualizarEdicao(u.id, "codigo", e.target.value.toUpperCase())}
                 />
-                <button className="text-muted hover:text-gold transition" title="Alterar" onClick={() => salvarAlteracao(u)}>
-                  <Pencil size={16} />
+                <button
+                  className={`p-1.5 rounded-md transition ${
+                    salvos[u.id] ? "text-white bg-teal" : temEdicao ? "text-gold-strong hover:bg-gold-soft/40" : "text-muted hover:bg-canvas"
+                  }`}
+                  title={salvos[u.id] ? "Salvo" : "Salvar"}
+                  onClick={() => salvarAlteracao(u)}
+                >
+                  <Save size={16} />
                 </button>
               </div>
             ) : (
@@ -128,7 +168,8 @@ function Conteudo() {
               </div>
             )}
           </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
