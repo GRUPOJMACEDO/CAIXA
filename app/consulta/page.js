@@ -19,7 +19,7 @@ function gerarIdLinhaConsulta() {
 }
 
 function paraCSV(linhas, mostrarUnidade) {
-  const cabecalho = ["Data", ...(mostrarUnidade ? ["Unidade"] : []), "Nº OS", "Categoria", "Tipo de Serviço", "Orçamento Aprovado", "Valor Pago"];
+  const cabecalho = ["Data", ...(mostrarUnidade ? ["Unidade"] : []), "Nº OS", "Categoria", "Tipo de Serviço", "Orçamento Aprovado", "Valor Pago", "Forma de Pagamento"];
   const corpo = linhas.map((l) => [
     formatarDataBR(l.data),
     ...(mostrarUnidade ? [l.unidades?.nome || ""] : []),
@@ -28,6 +28,9 @@ function paraCSV(linhas, mostrarUnidade) {
     l.tipos_servico?.nome || "",
     formatarMoedaSemSimbolo(l.orcamento_aprovado),
     formatarMoedaSemSimbolo(l.valor_pago),
+    l.forma_pagamento === "MÚLTIPLAS"
+      ? (l.formas_pagamento || []).map((f) => `${f.forma_pagamento}: R$ ${formatarMoedaSemSimbolo(f.valor)}`).join(" / ")
+      : l.forma_pagamento || "",
   ]);
   const escapar = (v) => `"${String(v).replace(/"/g, '""')}"`;
   return [cabecalho, ...corpo].map((linha) => linha.map(escapar).join(";")).join("\n");
@@ -347,6 +350,7 @@ function Conteudo() {
                     <td className="p-3">Tipo de serviço</td>
                     <td className="p-3 text-right">Orçamento</td>
                     <td className="p-3 text-right">Pago</td>
+                    <td className="p-3">Forma de pagamento</td>
                     <td className="p-3 w-10"></td>
                   </tr>
                 </thead>
@@ -374,6 +378,18 @@ function Conteudo() {
                         </td>
                         <td className="p-3 text-right font-mono-num">R$ {formatarMoedaSemSimbolo(r.orcamento_aprovado)}</td>
                         <td className="p-3 text-right font-mono-num font-medium">R$ {formatarMoedaSemSimbolo(r.valor_pago)}</td>
+                        <td className="p-3">
+                          {r.forma_pagamento === "MÚLTIPLAS" ? (
+                            <span
+                              className="text-xs px-1.5 py-0.5 rounded bg-gold-soft/50 text-gold-strong font-medium cursor-help"
+                              title={(r.formas_pagamento || []).map((f) => `${f.forma_pagamento}: R$ ${formatarMoedaSemSimbolo(f.valor)}`).join(" · ")}
+                            >
+                              Múltiplas
+                            </span>
+                          ) : (
+                            <span className="text-xs text-muted">{r.forma_pagamento || "—"}</span>
+                          )}
+                        </td>
                         <td className="p-3 text-right">
                           <div className="flex items-center justify-end gap-2">
                             {podeEditar && (
