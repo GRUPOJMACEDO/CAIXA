@@ -12,6 +12,7 @@ import { podeAlterar, podeExcluirLancamento, podeLancarDataRetroativa } from "..
 import { iconeCategoria } from "../../lib/iconesCategoria";
 import { formatarDataBR, formatarMoedaSemSimbolo } from "../../lib/formato";
 import { FORMAS_PAGAMENTO, BANDEIRAS, precisaParcelas as precisaParcelasFn, precisaBandeira as precisaBandeiraFn } from "../../lib/formasPagamento";
+import { normalizarNumeroOS } from "../../lib/validacaoOS";
 
 let proximoIdLinhaConsulta = 1;
 function gerarIdLinhaConsulta() {
@@ -49,6 +50,7 @@ function Conteudo() {
   const [selecionado, setSelecionado] = useState(null);
   const [editando, setEditando] = useState(false);
   const [edicao, setEdicao] = useState({});
+  const [erroNumeroOs, setErroNumeroOs] = useState(null);
   const [tiposServicoEdicao, setTiposServicoEdicao] = useState([]);
   const [salvando, setSalvando] = useState(false);
   const [excluindo, setExcluindo] = useState(false);
@@ -115,6 +117,7 @@ function Conteudo() {
     setMotivoExclusao("");
     setEdicao({
       data: item.data,
+      numero_os: item.numero_os,
       tipo_servico_id: item.tipo_servico_id,
       orcamento_aprovado: Number(item.orcamento_aprovado),
       valor_pago: Number(item.valor_pago),
@@ -123,6 +126,7 @@ function Conteudo() {
       bandeira: item.bandeira || "",
       observacoes: item.observacoes || "",
     });
+    setErroNumeroOs(null);
     supabase
       .from("tipos_servico")
       .select("*")
@@ -175,6 +179,18 @@ function Conteudo() {
       alert("Selecione a forma de pagamento.");
       return;
     }
+
+    let numeroOsValidado = null;
+    if (podeEditarData) {
+      const resultado = normalizarNumeroOS(edicao.numero_os);
+      if (!resultado.valido) {
+        setErroNumeroOs(resultado.erro);
+        return;
+      }
+      setErroNumeroOs(null);
+      numeroOsValidado = resultado.valor;
+    }
+
     const totalFormas = formasPagamentoEdicao.reduce((s, f) => s + (Number(f.valor) || 0), 0);
     const valorPagoEfetivo = usaMultiplas ? totalFormas : Number(edicao.valor_pago) || 0;
 
@@ -183,6 +199,7 @@ function Conteudo() {
       .from("lancamentos")
       .update({
         ...(podeEditarData && edicao.data ? { data: edicao.data } : {}),
+        ...(podeEditarData && numeroOsValidado ? { numero_os: numeroOsValidado } : {}),
         tipo_servico_id: edicao.tipo_servico_id,
         orcamento_aprovado: Number(edicao.orcamento_aprovado) || 0,
         valor_pago: valorPagoEfetivo,
@@ -511,14 +528,29 @@ function Conteudo() {
           ) : (
             <div className="space-y-4">
               {podeEditarData && (
-                <div>
-                  <label className="field-label">Data do lançamento</label>
-                  <input
-                    type="date"
-                    className="field-input"
-                    value={edicao.data || ""}
-                    onChange={(e) => setEdicao({ ...edicao, data: e.target.value })}
-                  />
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="field-label">Data do lançamento</label>
+                    <input
+                      type="date"
+                      className="field-input"
+                      value={edicao.data || ""}
+                      onChange={(e) => setEdicao({ ...edicao, data: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="field-label">Nº da OS</label>
+                    <input
+                      className="field-input font-mono-num"
+                      maxLength={10}
+                      value={edicao.numero_os || ""}
+                      onChange={(e) => {
+                        setEdicao({ ...edicao, numero_os: e.target.value.toUpperCase() });
+                        setErroNumeroOs(null);
+                      }}
+                    />
+                    {erroNumeroOs && <p className="text-xs text-danger mt-1">{erroNumeroOs}</p>}
+                  </div>
                 </div>
               )}
               <div>
