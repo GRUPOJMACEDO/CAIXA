@@ -13,28 +13,11 @@ import { iconeCategoria } from "../../lib/iconesCategoria";
 import { formatarDataBR, formatarMoedaSemSimbolo } from "../../lib/formato";
 import { FORMAS_PAGAMENTO, BANDEIRAS, precisaParcelas as precisaParcelasFn, precisaBandeira as precisaBandeiraFn } from "../../lib/formasPagamento";
 import { normalizarNumeroOS } from "../../lib/validacaoOS";
+import { listaSemanasRecentes } from "../../lib/fusoHorario";
 
 let proximoIdLinhaConsulta = 1;
 function gerarIdLinhaConsulta() {
   return proximoIdLinhaConsulta++;
-}
-
-function paraCSV(linhas, mostrarUnidade) {
-  const cabecalho = ["Data", ...(mostrarUnidade ? ["Unidade"] : []), "Nº OS", "Categoria", "Tipo de Serviço", "Orçamento Aprovado", "Valor Pago", "Forma de Pagamento"];
-  const corpo = linhas.map((l) => [
-    formatarDataBR(l.data),
-    ...(mostrarUnidade ? [l.unidades?.nome || ""] : []),
-    l.numero_os,
-    l.categorias?.nome || "",
-    l.tipos_servico?.nome || "",
-    formatarMoedaSemSimbolo(l.orcamento_aprovado),
-    formatarMoedaSemSimbolo(l.valor_pago),
-    l.forma_pagamento === "MÚLTIPLAS"
-      ? (l.formas_pagamento || []).map((f) => `${f.forma_pagamento}: R$ ${formatarMoedaSemSimbolo(f.valor)}`).join(" / ")
-      : l.forma_pagamento || "",
-  ]);
-  const escapar = (v) => `"${String(v).replace(/"/g, '""')}"`;
-  return [cabecalho, ...corpo].map((linha) => linha.map(escapar).join(";")).join("\n");
 }
 
 function Conteudo() {
@@ -43,6 +26,9 @@ function Conteudo() {
   const [numeroOs, setNumeroOs] = useState("");
   const [dataDe, setDataDe] = useState("");
   const [dataAte, setDataAte] = useState("");
+  const [modoPeriodo, setModoPeriodo] = useState("intervalo"); // "intervalo" | "semana"
+  const semanas = listaSemanasRecentes(16);
+  const [semanaSelecionada, setSemanaSelecionada] = useState(semanas[0].valor);
   const [categoriaId, setCategoriaId] = useState("");
   const [unidadeId, setUnidadeId] = useState("");
   const [resultados, setResultados] = useState(null);
@@ -61,6 +47,13 @@ function Conteudo() {
   const [linhaEditandoEdicao, setLinhaEditandoEdicao] = useState(null);
   const snapshotEdicaoConsultaRef = useRef(null);
   const mostrarUnidade = unidades.length > 1;
+  const unidadesVisiveis = unidades.filter((u) => (linhaFiltro === "ih" ? u.atende_ih : linhaFiltro === "ci" ? u.atende_ci : true));
+
+  useEffect(() => {
+    if (unidadeId && !unidadesVisiveis.some((u) => u.id === unidadeId)) {
+      setUnidadeId("");
+    }
+  }, [linhaFiltro]); // eslint-disable-line react-hooks/exhaustive-deps
   const podeEditar = podeAlterar(usuario.cargo, usuario.linha);
   const podeEditarData = podeLancarDataRetroativa(usuario.cargo);
   const podeExcluir = podeExcluirLancamento(usuario.cargo);
@@ -83,8 +76,13 @@ function Conteudo() {
 
     if (linhaFiltro) query = query.eq("linha", linhaFiltro);
     if (numeroOs.trim()) query = query.ilike("numero_os", `%${numeroOs.trim().toUpperCase()}%`);
-    if (dataDe) query = query.gte("data", dataDe);
-    if (dataAte) query = query.lte("data", dataAte);
+    if (modoPeriodo === "semana") {
+      const semana = semanas.find((s) => s.valor === semanaSelecionada) || semanas[0];
+      query = query.gte("data", semana.inicio).lte("data", semana.fim);
+    } else {
+      if (dataDe) query = query.gte("data", dataDe);
+      if (dataAte) query = query.lte("data", dataAte);
+    }
     if (categoriaId) query = query.eq("categoria_id", categoriaId);
 
     const { data } = await query;
@@ -96,18 +94,35 @@ function Conteudo() {
     setNumeroOs("");
     setDataDe("");
     setDataAte("");
+    setModoPeriodo("intervalo");
     setCategoriaId("");
     setUnidadeId("");
     setResultados(null);
   }
 
-  function exportar() {
-    const csv = "\uFEFF" + paraCSV(resultados, mostrarUnidade);
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.download = `consulta-caixa-jmacedo-${hojeBrasil()}.csv`;
-    link.click();
+  async function exportar() {
+    const XLSX = await import("xlsx");
+    const linhasExport = resultados.map((l) => {
+      const linha = {
+        Data: formatarDataBR(l.data),
+        ...(mostrarUnidade ? { Unidade: l.unidades?.nome || "" } : {}),
+        "Nº OS": l.numero_os,
+        Categoria: l.categorias?.nome || "",
+        Linha: l.linha === "ih" ? "IH" : "CI",
+        "Tipo de Serviço": l.tipos_servico?.nome || "",
+        "Orçamento Aprovado": Number(l.orcamento_aprovado),
+        "Valor Pago": Number(l.valor_pago),
+        "Forma de Pagamento":
+          l.forma_pagamento === "MÚLTIPLAS"
+            ? (l.formas_pagamento || []).map((f) => `${f.forma_pagamento}: R$ ${formatarMoedaSemSimbolo(f.valor)}`).join(" / ")
+            : l.forma_pagamento || "",
+      };
+      return linha;
+    });
+    const planilha = XLSX.utils.json_to_sheet(linhasExport);
+    const livro = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(livro, planilha, "Consulta");
+    XLSX.writeFile(livro, `consulta-caixa-jmacedo-${hojeBrasil()}.xlsx`);
   }
 
   function abrirDetalhe(item) {
@@ -301,13 +316,29 @@ function Conteudo() {
           <label className="field-label">Nº da OS</label>
           <input className="field-input" value={numeroOs} onChange={(e) => setNumeroOs(e.target.value.toUpperCase())} placeholder="Ex: O-00000015" />
         </div>
-        <div>
-          <label className="field-label">Data de</label>
-          <input className="field-input" type="date" value={dataDe} onChange={(e) => setDataDe(e.target.value)} />
-        </div>
-        <div>
-          <label className="field-label">Data até</label>
-          <input className="field-input" type="date" value={dataAte} onChange={(e) => setDataAte(e.target.value)} />
+        <div className="col-span-2">
+          <div className="flex items-center justify-between mb-1">
+            <label className="field-label mb-0">{modoPeriodo === "semana" ? "Semana" : "Data de / até"}</label>
+            <button
+              type="button"
+              onClick={() => setModoPeriodo((m) => (m === "semana" ? "intervalo" : "semana"))}
+              className="text-[11px] text-gold-strong hover:underline"
+            >
+              {modoPeriodo === "semana" ? "Usar intervalo de datas" : "Buscar por semana"}
+            </button>
+          </div>
+          {modoPeriodo === "semana" ? (
+            <select className="field-input" value={semanaSelecionada} onChange={(e) => setSemanaSelecionada(e.target.value)}>
+              {semanas.map((s) => (
+                <option key={s.valor} value={s.valor}>{s.rotulo}</option>
+              ))}
+            </select>
+          ) : (
+            <div className="grid grid-cols-2 gap-3">
+              <input className="field-input" type="date" value={dataDe} onChange={(e) => setDataDe(e.target.value)} />
+              <input className="field-input" type="date" value={dataAte} onChange={(e) => setDataAte(e.target.value)} />
+            </div>
+          )}
         </div>
         <div>
           <label className="field-label">Categoria</label>
@@ -323,7 +354,7 @@ function Conteudo() {
             <label className="field-label">Unidade</label>
             <select className="field-input" value={unidadeId} onChange={(e) => setUnidadeId(e.target.value)}>
               <option value="">Todas as unidades</option>
-              {unidades.map((u) => (
+              {unidadesVisiveis.map((u) => (
                 <option key={u.id} value={u.id}>{u.nome}</option>
               ))}
             </select>
