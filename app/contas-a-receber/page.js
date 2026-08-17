@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { Bell, History, Ticket, Pencil, Trash2, Plus, X } from "lucide-react";
+import { Bell, History, Ticket, Pencil, Trash2, Plus, X, AlertTriangle } from "lucide-react";
 import AppShell from "../../components/AppShell";
 import Modal from "../../components/Modal";
 import CurrencyInput from "../../components/CurrencyInput";
@@ -9,7 +9,7 @@ import FormasPagamentoModal from "../../components/FormasPagamentoModal";
 import { supabase } from "../../lib/supabaseClient";
 import { useSessao } from "../../lib/SessaoContext";
 import { hojeBrasil } from "../../lib/fusoHorario";
-import { podeVerTodasUnidades } from "../../lib/permissions";
+import { podeVerTodasUnidades, podeExcluirLancamento } from "../../lib/permissions";
 import { formatarMoedaSemSimbolo, formatarDataBR } from "../../lib/formato";
 import { FORMAS_PAGAMENTO, precisaParcelas as precisaParcelasFn, precisaBandeira as precisaBandeiraFn } from "../../lib/formasPagamento";
 
@@ -38,6 +38,10 @@ function ConteudoContasAReceber() {
   const snapshotEdicaoPopupRef = useRef(null);
   const [lembretesAbertos, setLembretesAbertos] = useState(false);
   const [lembretesMostrados, setLembretesMostrados] = useState(false);
+  const [excluindo, setExcluindo] = useState(false);
+  const [motivoExclusao, setMotivoExclusao] = useState("");
+  const [processandoExclusao, setProcessandoExclusao] = useState(false);
+  const podeExcluir = podeExcluirLancamento(usuario.cargo);
   const unidadesMap = Object.fromEntries(unidades.map((u) => [u.id, u.nome]));
   const mostrarUnidade = podeVerTodasUnidades(usuario.cargo) || unidades.length > 1;
 
@@ -103,6 +107,32 @@ function ConteudoContasAReceber() {
     setHistorico([]);
     setFormasPagamentoPopup([]);
     setLinhaEditandoPopup(null);
+    setExcluindo(false);
+    setMotivoExclusao("");
+  }
+
+  async function confirmarExclusaoConta() {
+    if (!motivoExclusao.trim() || !selecionada) return;
+    setProcessandoExclusao(true);
+    const ids = historico.map((h) => h.id);
+    // primeiro grava o motivo em cada lançamento (fica no log de auditoria), depois exclui de fato
+    const { error: erroMotivo } = await supabase
+      .from("lancamentos")
+      .update({ motivo_exclusao: motivoExclusao.trim(), alterado_por: usuario.id, alterado_em: new Date().toISOString() })
+      .in("id", ids);
+    if (erroMotivo) {
+      alert("Erro ao registrar o motivo: " + erroMotivo.message);
+      setProcessandoExclusao(false);
+      return;
+    }
+    const { error } = await supabase.from("lancamentos").delete().in("id", ids);
+    setProcessandoExclusao(false);
+    if (error) {
+      alert("Erro ao excluir: " + error.message);
+      return;
+    }
+    fecharPopup();
+    carregar();
   }
 
   async function confirmarPagamento() {
@@ -311,12 +341,54 @@ function ConteudoContasAReceber() {
           onFechar={fecharPopup}
           largura="max-w-xl"
         >
+          {excluindo ? (
+            <div className="space-y-4">
+              <div className="flex items-start gap-2 text-sm text-danger">
+                <AlertTriangle size={18} className="shrink-0 mt-0.5" />
+                <p>
+                  Você está prestes a excluir permanentemente o registro da OS{" "}
+                  <span className="font-mono-num font-medium">{selecionada.numero_os}</span> do Contas a Receber
+                  (orçamento de <span className="font-mono-num font-medium">R$ {formatarMoedaSemSimbolo(selecionada.orcamento_aprovado)}</span>, sem nenhum valor pago). Essa ação não pode ser desfeita.
+                </p>
+              </div>
+              <div>
+                <label className="field-label">Motivo da exclusão (obrigatório)</label>
+                <textarea
+                  className="field-input"
+                  rows={3}
+                  value={motivoExclusao}
+                  onChange={(e) => setMotivoExclusao(e.target.value)}
+                  placeholder="Ex: cliente desistiu, orçamento cadastrado por engano, etc."
+                />
+                <p className="text-xs text-muted mt-1">O motivo fica registrado no log do sistema, junto com os dados excluídos.</p>
+              </div>
+              <div className="flex justify-end gap-2">
+                <button className="btn" onClick={() => setExcluindo(false)}>Cancelar</button>
+                <button
+                  className="btn-primary bg-danger hover:bg-danger flex items-center gap-1.5 disabled:opacity-40"
+                  disabled={!motivoExclusao.trim() || processandoExclusao}
+                  onClick={confirmarExclusaoConta}
+                >
+                  <Trash2 size={14} /> {processandoExclusao ? "Excluindo…" : "Confirmar exclusão"}
+                </button>
+              </div>
+            </div>
+          ) : (
           <div className="space-y-4">
             <div className="grid grid-cols-3 gap-3 text-sm">
               <div><p className="text-xs text-muted">Orçamento</p><p className="font-mono-num font-medium">R$ {formatarMoedaSemSimbolo(selecionada.orcamento_aprovado)}</p></div>
               <div><p className="text-xs text-muted">Já pago</p><p className="font-mono-num font-medium">R$ {formatarMoedaSemSimbolo(selecionada.total_pago)}</p></div>
               <div><p className="text-xs text-muted">Falta pagar</p><p className="font-mono-num font-medium text-bronze">R$ {formatarMoedaSemSimbolo(selecionada.falta_pagar)}</p></div>
             </div>
+
+            {podeExcluir && Number(selecionada.total_pago) === 0 && (
+              <button
+                className="text-xs text-danger hover:underline flex items-center gap-1"
+                onClick={() => setExcluindo(true)}
+              >
+                <Trash2 size={12} /> Excluir este registro do Contas a Receber
+              </button>
+            )}
 
             <div>
               <p className="field-label flex items-center gap-1.5 mb-1.5"><History size={12} /> O que já foi lançado nessa OS</p>
@@ -443,6 +515,7 @@ function ConteudoContasAReceber() {
               </button>
             </div>
           </div>
+          )}
         </Modal>
       )}
 
