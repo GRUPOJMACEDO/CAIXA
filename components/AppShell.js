@@ -145,17 +145,13 @@ function Shell({ children }) {
   const router = useRouter();
   const { usuario, unidades, sair, podeAlternarLinha } = useSessao();
   const [recolhido, setRecolhido] = useState(false); // painel lateral sempre visível por padrão
-  const [secaoAberta, setSecaoAberta] = useState(null);
+  const [secaoAberta, setSecaoAberta] = useState(() => secaoDaRota(pathname));
   const ignorarProximaAutoAbertura = useRef(false);
-  const primeiraCarga = useRef(true);
 
-  // ao navegar, abre automaticamente só a seção onde a página atual está —
-  // exceto no primeiro carregamento do sistema, que começa sempre fechado
+  // ao navegar (ou carregar/atualizar a página), abre automaticamente só a
+  // seção onde a página atual está — clicar em outro menu troca pra ele e
+  // fecha o anterior; só o botão Home força tudo fechado de propósito
   useEffect(() => {
-    if (primeiraCarga.current) {
-      primeiraCarga.current = false;
-      return;
-    }
     if (ignorarProximaAutoAbertura.current) {
       ignorarProximaAutoAbertura.current = false;
       return;
