@@ -38,7 +38,7 @@ function FormularioLancamento() {
   const precisaEscolherLinha = !linhaFixaUsuario;
   const unidadesDaLinha = unidades.filter((u) => (linhaOperacao === "ih" ? u.atende_ih : u.atende_ci));
   const categoriasVisiveis = categorias.filter((c) => {
-    if (linhaFixaUsuario === "ih") return c.somente_ih; // login só-IH: só as categorias de IH
+    if (linhaFixaUsuario === "ih") return c.somente_ih || c.nome === "Acessório"; // login só-IH: categorias de IH + Acessório (não é exclusiva de nenhuma linha)
     if (linhaOperacao === "ih") return true; // gestão em modo IH: vê tudo
     return !c.somente_ih; // CI (fixo ou gestão em modo CI): esconde as exclusivas de IH
   });
