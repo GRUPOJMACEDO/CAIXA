@@ -125,6 +125,19 @@ function Conteudo() {
     XLSX.writeFile(livro, `consulta-caixa-jmacedo-${hojeBrasil()}.xlsx`);
   }
 
+  useEffect(() => {
+    if (!edicao.categoria_id) {
+      setTiposServicoEdicao([]);
+      return;
+    }
+    supabase
+      .from("tipos_servico")
+      .select("*")
+      .eq("categoria_id", edicao.categoria_id)
+      .order("nome")
+      .then(({ data }) => setTiposServicoEdicao(data || []));
+  }, [edicao.categoria_id]); // eslint-disable-line react-hooks/exhaustive-deps
+
   function abrirDetalhe(item) {
     setSelecionado(item);
     setEditando(false);
@@ -133,6 +146,7 @@ function Conteudo() {
     setEdicao({
       data: item.data,
       numero_os: item.numero_os,
+      categoria_id: item.categoria_id,
       tipo_servico_id: item.tipo_servico_id,
       orcamento_aprovado: Number(item.orcamento_aprovado),
       valor_pago: Number(item.valor_pago),
@@ -142,12 +156,6 @@ function Conteudo() {
       observacoes: item.observacoes || "",
     });
     setErroNumeroOs(null);
-    supabase
-      .from("tipos_servico")
-      .select("*")
-      .eq("categoria_id", item.categoria_id)
-      .order("nome")
-      .then(({ data }) => setTiposServicoEdicao(data || []));
     setFormasPagamentoEdicao(
       item.formas_pagamento && item.formas_pagamento.length > 0
         ? item.formas_pagamento.map((f) => ({ ...f, id: gerarIdLinhaConsulta() }))
@@ -206,6 +214,11 @@ function Conteudo() {
       numeroOsValidado = resultado.valor;
     }
 
+    if (!edicao.categoria_id || !edicao.tipo_servico_id) {
+      alert("Selecione a categoria e o tipo de serviço.");
+      return;
+    }
+
     const totalFormas = formasPagamentoEdicao.reduce((s, f) => s + (Number(f.valor) || 0), 0);
     const valorPagoEfetivo = usaMultiplas ? totalFormas : Number(edicao.valor_pago) || 0;
 
@@ -215,6 +228,7 @@ function Conteudo() {
       .update({
         ...(podeEditarData && edicao.data ? { data: edicao.data } : {}),
         ...(podeEditarData && numeroOsValidado ? { numero_os: numeroOsValidado } : {}),
+        categoria_id: edicao.categoria_id,
         tipo_servico_id: edicao.tipo_servico_id,
         orcamento_aprovado: Number(edicao.orcamento_aprovado) || 0,
         valor_pago: valorPagoEfetivo,
@@ -585,13 +599,26 @@ function Conteudo() {
                 </div>
               )}
               <div>
+                <label className="field-label">Categoria</label>
+                <select
+                  className="field-input"
+                  value={edicao.categoria_id || ""}
+                  onChange={(e) => setEdicao({ ...edicao, categoria_id: e.target.value, tipo_servico_id: "" })}
+                >
+                  <option value="">Selecione</option>
+                  {categorias.map((c) => (
+                    <option key={c.id} value={c.id}>{c.nome}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
                 <label className="field-label">Tipo de serviço</label>
                 <select
                   className="field-input"
                   value={edicao.tipo_servico_id || ""}
                   onChange={(e) => setEdicao({ ...edicao, tipo_servico_id: e.target.value })}
                 >
-                  <option value="">Selecione</option>
+                  <option value="">{edicao.categoria_id ? "Selecione" : "Escolha a categoria primeiro"}</option>
                   {tiposServicoEdicao.map((t) => (
                     <option key={t.id} value={t.id}>{t.nome}</option>
                   ))}
