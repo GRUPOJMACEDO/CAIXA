@@ -81,8 +81,57 @@ export function navConfiguracoes(cargo) {
   return itens;
 }
 
+// cor própria por item — dá pra escanear o menu rápido, cada tela com seu tom
+const CORES_ITEM = {
+  "/lancamento": "#2670B5",
+  "/consulta": "#7C56B5",
+  "/contas-a-receber": "#3F8A5C",
+  "/acompanhamento": "#C9752E",
+  "/relatorios": "#0E7A72",
+  "/dashboard/valores-diario": "#2670B5",
+  "/dashboard/valores-semanal": "#3E6FB0",
+  "/dashboard": "#2E5A94",
+  "/dashboard/metas": "#B8862E",
+  "/dashboard/ow": "#9C5A34",
+  "/dashboard/vendedores": "#0E7A72",
+  "/dashboard/acessorios": "#9B5FB0",
+  "/configuracoes/tipos-servico": "#5B6B84",
+  "/configuracoes/categorias": "#C9A227",
+  "/configuracoes/modelos": "#4C94D6",
+  "/configuracoes/unidades": "#3F8A5C",
+  "/configuracoes/usuarios": "#7C56B5",
+  "/configuracoes/metas": "#B8862E",
+  "/configuracoes/log": "#7C819C",
+  "/configuracoes/manutencao": "#B23B2E",
+};
+
+const CORES_SECAO = {
+  operacao: "#1B3A5C",
+  dashboard: "#B8862E",
+  configuracoes: "#5B6B84",
+  painel: "#0E7A72",
+};
+
+/** Selo colorido com efeito 3D (gradiente + sombra) em volta do ícone. */
+function IconeSelo({ icone: Icone, cor, tamanho = 14, caixa = 22 }) {
+  return (
+    <span
+      className="inline-flex items-center justify-center rounded-md shrink-0"
+      style={{
+        width: caixa,
+        height: caixa,
+        background: `radial-gradient(circle at 30% 25%, ${cor}, ${cor}CC 70%)`,
+        boxShadow: "0 2px 3px rgba(0,0,0,0.28), inset 0 1px 1px rgba(255,255,255,0.55), inset 0 -1px 1px rgba(0,0,0,0.12)",
+      }}
+    >
+      <Icone size={tamanho} className="text-white" strokeWidth={2.2} />
+    </span>
+  );
+}
+
 function ItemNav({ item, ativo, recolhido }) {
   const Icone = item.icon;
+  const cor = CORES_ITEM[item.href] || "#7C819C";
   return (
     <Link
       href={item.href}
@@ -91,13 +140,13 @@ function ItemNav({ item, ativo, recolhido }) {
         ${ativo ? "bg-gold/15 text-gold font-medium" : "text-muted hover:bg-ink/5 hover:text-ink"}
         ${recolhido ? "justify-center" : ""}`}
     >
-      <Icone size={16} strokeWidth={2} className="shrink-0" />
+      <IconeSelo icone={Icone} cor={cor} />
       {!recolhido && item.label}
     </Link>
   );
 }
 
-function SecaoNav({ titulo, hrefHub, icone: Icone, itens, pathname, recolhido, aberta, onToggle, aoClicarNome }) {
+function SecaoNav({ titulo, hrefHub, icone: Icone, corSecao, itens, pathname, recolhido, aberta, onToggle, aoClicarNome }) {
   if (recolhido) {
     return (
       <div className="space-y-0.5">
@@ -116,7 +165,7 @@ function SecaoNav({ titulo, hrefHub, icone: Icone, itens, pathname, recolhido, a
           className="text-[11px] uppercase tracking-wider flex items-center gap-1.5 transition font-bold"
           style={{ color: "#1B3A5C" }}
         >
-          {Icone && <Icone size={11} />}{titulo}
+          {Icone && <IconeSelo icone={Icone} cor={corSecao || "#7C819C"} tamanho={10} caixa={17} />}{titulo}
         </Link>
         <button onClick={onToggle} className="text-muted hover:text-ink p-0.5">
           <ChevronDown size={12} className={`transition-transform ${aberta ? "" : "-rotate-90"}`} />
@@ -192,6 +241,7 @@ function Shell({ children }) {
             titulo="Operação"
             hrefHub="/operacao"
             icone={Briefcase}
+            corSecao={CORES_SECAO.operacao}
             itens={NAV_OPERACAO}
             pathname={pathname}
             recolhido={recolhido}
@@ -204,6 +254,7 @@ function Shell({ children }) {
             titulo="Dashboard"
             hrefHub="/dashboard"
             icone={DollarSign}
+            corSecao={CORES_SECAO.dashboard}
             itens={NAV_DASHBOARD}
             pathname={pathname}
             recolhido={recolhido}
@@ -217,6 +268,7 @@ function Shell({ children }) {
               titulo="Configurações"
               hrefHub="/configuracoes"
               icone={Settings}
+              corSecao={CORES_SECAO.configuracoes}
               itens={itensConfig}
               pathname={pathname}
               recolhido={recolhido}
@@ -236,7 +288,7 @@ function Shell({ children }) {
                 title={recolhido ? "Abrir painel de TV" : undefined}
                 className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-muted hover:bg-ink/5 hover:text-ink transition ${recolhido ? "justify-center" : ""}`}
               >
-                <Tv size={16} strokeWidth={2} className="shrink-0" />
+                <IconeSelo icone={Tv} cor={CORES_SECAO.painel} />
                 {!recolhido && "Abrir painel de TV"}
               </a>
             )}
@@ -248,7 +300,7 @@ function Shell({ children }) {
                 title={recolhido ? "Abrir painel de TV — IH" : undefined}
                 className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-muted hover:bg-ink/5 hover:text-ink transition ${recolhido ? "justify-center" : ""}`}
               >
-                <Tv size={16} strokeWidth={2} className="shrink-0 text-teal" />
+                <IconeSelo icone={Tv} cor="#B8862E" />
                 {!recolhido && (usuario.linha === "ih" ? "Abrir painel de TV" : "Painel de TV — IH")}
               </a>
             )}
