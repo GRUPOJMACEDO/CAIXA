@@ -1,6 +1,6 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
-import { PartyPopper, Sparkles, Megaphone, X, Check } from "lucide-react";
+import { useEffect, useState } from "react";
+import { PartyPopper, Sparkles, Megaphone, Check } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { useSessao } from "../lib/SessaoContext";
 
@@ -12,42 +12,23 @@ function formatarMoeda(v) {
 
 /**
  * Balões de notificação ao vivo (Supabase Realtime):
- *   - novo lançamento → balão de comemoração, some sozinho em 5s
+ *   - novo lançamento → broadcast público (todo mundo vê, independente
+ *     de unidade) com só o resumo — some sozinho em 5s
  *   - aviso do administrador → balão que só fecha no clique
  */
 export default function BalaoNotificacoes() {
   const { usuario } = useSessao();
   const [baloes, setBaloes] = useState([]);
-  const cacheUnidades = useRef(new Map());
-  const cacheUsuarios = useRef(new Map());
 
   function removerBalao(id) {
     setBaloes((atual) => atual.filter((b) => b.id !== id));
   }
 
-  async function nomeDaUnidade(id) {
-    if (cacheUnidades.current.has(id)) return cacheUnidades.current.get(id);
-    const { data } = await supabase.from("unidades").select("nome").eq("id", id).single();
-    const nome = data?.nome || "—";
-    cacheUnidades.current.set(id, nome);
-    return nome;
-  }
-
-  async function loginDoUsuario(id) {
-    if (cacheUsuarios.current.has(id)) return cacheUsuarios.current.get(id);
-    const { data } = await supabase.from("usuarios").select("login").eq("id", id).single();
-    const login = data?.login || "—";
-    cacheUsuarios.current.set(id, login);
-    return login;
-  }
-
-  async function aoNovoLancamento(payload) {
-    const l = payload.new;
-    const [unidadeNome, login] = await Promise.all([nomeDaUnidade(l.unidade_id), loginDoUsuario(l.atendente_id)]);
+  function aoNovoLancamento({ payload }) {
     const id = proximoIdBalao++;
     setBaloes((atual) => [
       ...atual,
-      { id, tipo: "lancamento", unidade: unidadeNome, login, valor: Number(l.valor_pago) },
+      { id, tipo: "lancamento", unidade: payload.unidade, login: payload.login, valor: Number(payload.valor) },
     ]);
     setTimeout(() => removerBalao(id), 5000);
   }
@@ -61,8 +42,8 @@ export default function BalaoNotificacoes() {
   useEffect(() => {
     if (!usuario) return;
     const canal = supabase
-      .channel("baloes-notificacoes")
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "lancamentos" }, aoNovoLancamento)
+      .channel("celebracoes")
+      .on("broadcast", { event: "novo_lancamento" }, aoNovoLancamento)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "avisos_admin" }, aoNovoAviso)
       .subscribe();
     return () => {
