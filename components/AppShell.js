@@ -29,6 +29,7 @@ import {
   Receipt,
   DatabaseZap,
   Briefcase,
+  BarChart3,
 } from "lucide-react";
 import BotaoModoClaroEscuro from "./BotaoModoClaroEscuro";
 import SinoSolicitacoesSenha from "./SinoSolicitacoesSenha";
@@ -50,6 +51,7 @@ import {
   temAcessoConfiguracoes,
   podeVerLogAuditoria,
   podeVerManutencao,
+  podeVerEstatisticas,
 } from "../lib/permissions";
 
 export const NAV_OPERACAO = [
@@ -80,6 +82,7 @@ export function navConfiguracoes(cargo) {
   if (podeConfigMetas(cargo)) itens.push({ href: "/configuracoes/metas", label: "Metas", icon: Target, descricao: "Meta mensal de cada unidade." });
   if (podeVerLogAuditoria(cargo)) itens.push({ href: "/configuracoes/log", label: "Log do sistema", icon: ScrollText, descricao: "Histórico de alterações no sistema." });
   if (podeVerManutencao(cargo)) itens.push({ href: "/configuracoes/manutencao", label: "Manutenção do banco", icon: DatabaseZap, descricao: "Apagar dados de teste antes de usar o sistema de verdade." });
+  if (podeVerEstatisticas(cargo)) itens.push({ href: "/configuracoes/estatisticas", label: "Estatísticas", icon: BarChart3, descricao: "Métricas e tendências de uso do sistema." });
   return itens;
 }
 
@@ -105,6 +108,7 @@ const CORES_ITEM = {
   "/configuracoes/metas": "#B8862E",
   "/configuracoes/log": "#7C819C",
   "/configuracoes/manutencao": "#B23B2E",
+  "/configuracoes/estatisticas": "#2E6B7A",
 };
 
 const CORES_SECAO = {
