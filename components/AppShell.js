@@ -36,6 +36,8 @@ import BotaoLinhaToggle from "./BotaoLinhaToggle";
 import BotaoFiltroMarca from "./BotaoFiltroMarca";
 import BotaoMural from "./BotaoMural";
 import BotaoUsuariosOnline from "./BotaoUsuariosOnline";
+import BotaoAvisoAdmin from "./BotaoAvisoAdmin";
+import BalaoNotificacoes from "./BalaoNotificacoes";
 import { SessaoProvider, useSessao } from "../lib/SessaoContext";
 import {
   rotuloCargo,
@@ -339,6 +341,7 @@ function Shell({ children }) {
             <BotaoLinhaToggle />
             <BotaoFiltroMarca />
             <BotaoUsuariosOnline />
+            <BotaoAvisoAdmin />
             <BotaoMural />
             <div className="text-right">
               <p className="text-sm font-medium text-ink leading-tight">{usuario.nome_completo}</p>
@@ -351,6 +354,7 @@ function Shell({ children }) {
         </header>
         <main className="p-6 max-w-full overflow-x-hidden">{children}</main>
       </div>
+      <BalaoNotificacoes />
     </div>
   );
 }
