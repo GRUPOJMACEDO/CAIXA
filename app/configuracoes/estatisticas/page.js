@@ -1,6 +1,21 @@
 "use client";
 import { useEffect, useState } from "react";
-import { BarChart3, Calendar, Building2, Clock, Percent, Hash, Flame, TrendingUp } from "lucide-react";
+import {
+  BarChart3,
+  Calendar,
+  CalendarDays,
+  CalendarRange,
+  CalendarClock,
+  SlidersHorizontal,
+  Building2,
+  Clock,
+  Percent,
+  Hash,
+  Flame,
+  TrendingUp,
+  Tags,
+  Grid3x3,
+} from "lucide-react";
 import {
   ResponsiveContainer,
   LineChart,
@@ -24,6 +39,13 @@ import { hojeBrasil } from "../../../lib/fusoHorario";
 
 const NOMES_DIA = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
 const NOMES_DIA_CURTO = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+
+const TIPOS_PERIODO = [
+  { id: "diario", rotulo: "Diário", icone: CalendarDays, descricao: "Últimos 30 dias, dia a dia" },
+  { id: "semanal", rotulo: "Semanal", icone: CalendarRange, descricao: "Últimas 12 semanas" },
+  { id: "mensal", rotulo: "Mensal", icone: CalendarClock, descricao: "Últimos 12 meses" },
+  { id: "personalizado", rotulo: "Personalizado", icone: SlidersHorizontal, descricao: "Escolha o período" },
+];
 
 function diaSeguinte(dataIso) {
   const d = new Date(dataIso + "T12:00:00");
@@ -72,7 +94,9 @@ function Conteudo() {
   const { usuario, unidades, marcasDisponiveis } = useSessao();
   const permitido = podeVerEstatisticas(usuario.cargo);
 
-  const [periodoMeses, setPeriodoMeses] = useState(3);
+  const [tipoPeriodo, setTipoPeriodo] = useState("diario"); // "diario" | "semanal" | "mensal" | "personalizado"
+  const [dataInicioCustom, setDataInicioCustom] = useState(somarDias(hojeBrasil(), -30));
+  const [dataFimCustom, setDataFimCustom] = useState(hojeBrasil());
   const [escopo, setEscopo] = useState("todas"); // "todas" | "marca:X" | "unidade:<id>"
   const [carregando, setCarregando] = useState(true);
 
@@ -85,11 +109,31 @@ function Conteudo() {
   const unidadeIdParam = escopo.startsWith("unidade:") ? escopo.slice(8) : null;
   const marcaParam = escopo.startsWith("marca:") ? escopo.slice(6) : null;
 
+  function calcularIntervalo() {
+    const hoje = hojeBrasil();
+    if (tipoPeriodo === "personalizado") {
+      const inicio = dataInicioCustom;
+      const fimExcl = diaSeguinte(dataFimCustom);
+      const dias = Math.round((new Date(fimExcl) - new Date(inicio)) / 86400000);
+      const granularidade = dias <= 45 ? "dia" : dias <= 180 ? "semana" : "mes";
+      return { inicio, fimExcl, granularidade };
+    }
+    if (tipoPeriodo === "semanal") {
+      return { inicio: somarDias(hoje, -7 * 11), fimExcl: diaSeguinte(hoje), granularidade: "semana" };
+    }
+    if (tipoPeriodo === "mensal") {
+      return { inicio: dataInicioMesesAtras(12), fimExcl: diaSeguinte(hoje), granularidade: "mes" };
+    }
+    // diario
+    return { inicio: somarDias(hoje, -29), fimExcl: diaSeguinte(hoje), granularidade: "dia" };
+  }
+
+  const intervalo = calcularIntervalo();
+
   async function carregar() {
     if (!permitido) return;
     setCarregando(true);
-    const dataFimExcl = diaSeguinte(hojeBrasil());
-    const dataInicioAmplo = dataInicioMesesAtras(periodoMeses);
+    const { inicio: dataInicioAmplo, fimExcl: dataFimExcl } = calcularIntervalo();
     const params = (dataInicio) => ({
       data_inicio: dataInicio,
       data_fim_excl: dataFimExcl,
@@ -132,16 +176,16 @@ function Conteudo() {
 
   useEffect(() => {
     carregar();
-  }, [periodoMeses, escopo]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [tipoPeriodo, dataInicioCustom, dataFimCustom, escopo]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!permitido) {
     return <p className="text-sm text-muted">Você não tem acesso às Estatísticas do sistema.</p>;
   }
 
-  // --- CI vs IH ao longo do tempo (agrupa por semana se período curto, por mês se 12 meses) ---
-  const agruparPorMes = periodoMeses === 12;
-  const chaveBucket = (dia) => (agruparPorMes ? dia.slice(0, 7) : inicioDaSemanaDe(dia));
-  const rotuloBucket = (chave) => (agruparPorMes ? formatarMesCurto(chave) : formatarDataCurta(chave));
+  // --- CI vs IH ao longo do tempo (granularidade conforme o período escolhido) ---
+  const { granularidade } = intervalo;
+  const chaveBucket = (dia) => (granularidade === "mes" ? dia.slice(0, 7) : granularidade === "semana" ? inicioDaSemanaDe(dia) : dia);
+  const rotuloBucket = (chave) => (granularidade === "mes" ? formatarMesCurto(chave) : formatarDataCurta(chave));
 
   const buckets = new Map();
   serieDiaria.forEach((l) => {
@@ -155,16 +199,15 @@ function Conteudo() {
     .map(([chave, v]) => ({ rotulo: rotuloBucket(chave), CI: v.CI, IH: v.IH }));
   const temIH = dadosTendencia.some((d) => d.IH > 0);
 
-  // --- Pareto por horário ---
+  // --- Volume por horário (00h–23h, ordem cronológica) ---
   const horasCompletas = Array.from({ length: 24 }, (_, h) => {
     const encontrado = porHora.find((p) => p.hora === h);
     return { hora: h, qtd: encontrado ? Number(encontrado.qtd) : 0 };
   });
   const horaPico = horasCompletas.reduce((max, h) => (h.qtd > max.qtd ? h : max), horasCompletas[0]);
   const totalHoras = horasCompletas.reduce((s, h) => s + h.qtd, 0);
-  const paretoOrdenado = [...horasCompletas].sort((a, b) => b.qtd - a.qtd);
   let acumulado = 0;
-  const dadosPareto = paretoOrdenado.map((h) => {
+  const dadosPareto = horasCompletas.map((h) => {
     acumulado += h.qtd;
     return {
       rotulo: `${String(h.hora).padStart(2, "0")}h`,
@@ -212,21 +255,48 @@ function Conteudo() {
         </div>
       </div>
 
-      <div className="flex items-center gap-2 mb-6">
+      <div className="flex items-center gap-2 mb-2 flex-wrap">
         <Calendar size={14} className="text-muted" />
         <span className="text-xs text-muted mr-1">Período de análise:</span>
-        {[3, 6, 12].map((m) => (
-          <button
-            key={m}
-            onClick={() => setPeriodoMeses(m)}
-            className={`px-3 py-1 rounded-full text-xs transition ${
-              periodoMeses === m ? "bg-[#2E6B7A] text-white font-medium" : "bg-white border border-line text-muted hover:border-[#2E6B7A]/50"
-            }`}
-          >
-            Últimos {m} {m === 1 ? "mês" : "meses"}
-          </button>
-        ))}
+        {TIPOS_PERIODO.map((t) => {
+          const Icone = t.icone;
+          return (
+            <button
+              key={t.id}
+              onClick={() => setTipoPeriodo(t.id)}
+              title={t.descricao}
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs transition ${
+                tipoPeriodo === t.id ? "bg-[#2E6B7A] text-white font-medium" : "bg-white border border-line text-muted hover:border-[#2E6B7A]/50"
+              }`}
+            >
+              <Icone size={12} /> {t.rotulo}
+            </button>
+          );
+        })}
       </div>
+
+      {tipoPeriodo === "personalizado" && (
+        <div className="flex items-center gap-2 mb-6 text-sm">
+          <label className="text-xs text-muted">De</label>
+          <input
+            type="date"
+            className="field-input py-1.5 w-40"
+            value={dataInicioCustom}
+            max={dataFimCustom}
+            onChange={(e) => setDataInicioCustom(e.target.value)}
+          />
+          <label className="text-xs text-muted">Até</label>
+          <input
+            type="date"
+            className="field-input py-1.5 w-40"
+            value={dataFimCustom}
+            min={dataInicioCustom}
+            max={hojeBrasil()}
+            onChange={(e) => setDataFimCustom(e.target.value)}
+          />
+        </div>
+      )}
+      {tipoPeriodo !== "personalizado" && <div className="mb-6" />}
 
       {/* KPIs */}
       <div className="grid grid-cols-5 gap-3 mb-6">
@@ -276,8 +346,12 @@ function Conteudo() {
 
       {/* CI vs IH ao longo do tempo */}
       <div className="card p-5 mb-6">
-        <p className="text-sm font-semibold text-ink mb-1">Registros ao longo do tempo{temIH ? " — CI vs IH" : ""}</p>
-        <p className="text-xs text-muted mb-4">{agruparPorMes ? "Agrupado por mês" : "Agrupado por semana"}, últimos {periodoMeses} meses.</p>
+        <p className="text-sm font-semibold text-ink mb-1 flex items-center gap-1.5">
+          <TrendingUp size={14} /> Registros ao longo do tempo{temIH ? " — CI vs IH" : ""}
+        </p>
+        <p className="text-xs text-muted mb-4">
+          Agrupado por {granularidade === "mes" ? "mês" : granularidade === "semana" ? "semana" : "dia"} · {formatarDataCurta(intervalo.inicio)} até {formatarDataCurta(hojeBrasil())}.
+        </p>
         {carregando ? (
           <p className="text-sm text-muted py-16 text-center">Carregando…</p>
         ) : (
@@ -298,8 +372,8 @@ function Conteudo() {
       <div className="grid grid-cols-2 gap-5 mb-6">
         {/* Pareto por horário */}
         <div className="card p-5">
-          <p className="text-sm font-semibold text-ink mb-1 flex items-center gap-1.5"><Clock size={14} /> Pareto por horário</p>
-          <p className="text-xs text-muted mb-4">Horas ordenadas por volume, com o acumulado em %.</p>
+          <p className="text-sm font-semibold text-ink mb-1 flex items-center gap-1.5"><Clock size={14} /> Volume por horário do dia</p>
+          <p className="text-xs text-muted mb-4">Das 00h às 23h, com o acumulado do dia em %.</p>
           {carregando ? (
             <p className="text-sm text-muted py-16 text-center">Carregando…</p>
           ) : (
@@ -319,7 +393,7 @@ function Conteudo() {
 
         {/* Distribuição por categoria */}
         <div className="card p-5">
-          <p className="text-sm font-semibold text-ink mb-1">Distribuição por categoria</p>
+          <p className="text-sm font-semibold text-ink mb-1 flex items-center gap-1.5"><Tags size={14} /> Distribuição por categoria</p>
           <p className="text-xs text-muted mb-4">Top 10 categorias por quantidade de registros.</p>
           {carregando ? (
             <p className="text-sm text-muted py-16 text-center">Carregando…</p>
@@ -339,7 +413,7 @@ function Conteudo() {
 
       {/* Mapa de calor dia × hora */}
       <div className="card p-5">
-        <p className="text-sm font-semibold text-ink mb-1">Mapa de calor — dia da semana × horário</p>
+        <p className="text-sm font-semibold text-ink mb-1 flex items-center gap-1.5"><Grid3x3 size={14} /> Mapa de calor — dia da semana × horário</p>
         <p className="text-xs text-muted mb-4">Quanto mais escuro, mais lançamentos aconteceram naquele horário.</p>
         {carregando ? (
           <p className="text-sm text-muted py-16 text-center">Carregando…</p>
