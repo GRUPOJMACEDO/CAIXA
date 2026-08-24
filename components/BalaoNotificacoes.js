@@ -5,9 +5,38 @@ import { supabase } from "../lib/supabaseClient";
 import { useSessao } from "../lib/SessaoContext";
 
 let proximoIdBalao = 1;
+const DURACAO_BALAO_MS = 10000;
 
 function formatarMoeda(v) {
   return Number(v || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 });
+}
+
+/** Bipe curto de duas notas (tipo notificação do Windows), sem depender de nenhum arquivo de som. */
+function tocarBip() {
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    const tocarNota = (frequencia, inicioEm, duracao) => {
+      const osc = ctx.createOscillator();
+      const ganho = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.value = frequencia;
+      const t0 = ctx.currentTime + inicioEm;
+      ganho.gain.setValueAtTime(0.0001, t0);
+      ganho.gain.exponentialRampToValueAtTime(0.18, t0 + 0.02);
+      ganho.gain.exponentialRampToValueAtTime(0.0001, t0 + duracao);
+      osc.connect(ganho);
+      ganho.connect(ctx.destination);
+      osc.start(t0);
+      osc.stop(t0 + duracao + 0.02);
+    };
+    if (ctx.state === "suspended") ctx.resume();
+    tocarNota(880, 0, 0.16); // primeira nota
+    tocarNota(1175, 0.14, 0.22); // segunda nota, um pouco mais aguda
+  } catch {
+    // navegador sem suporte a áudio — segue em silêncio, sem quebrar nada
+  }
 }
 
 /**
@@ -30,13 +59,15 @@ export default function BalaoNotificacoes() {
       ...atual,
       { id, tipo: "lancamento", unidade: payload.unidade, login: payload.login, valor: Number(payload.valor) },
     ]);
-    setTimeout(() => removerBalao(id), 5000);
+    tocarBip();
+    setTimeout(() => removerBalao(id), DURACAO_BALAO_MS);
   }
 
   function aoNovoAviso(payload) {
     const a = payload.new;
     const id = proximoIdBalao++;
     setBaloes((atual) => [...atual, { id, tipo: "aviso", texto: a.texto }]);
+    tocarBip();
   }
 
   useEffect(() => {
