@@ -61,7 +61,7 @@ function RotuloBarra({ x, y, width, index, chaveQtd, chaveValor, dados }) {
 }
 
 function Conteudo() {
-  const { unidades } = useSessao();
+  const { unidades, linhaFiltro, detalharLinha } = useSessao();
   const mesesLista = listaMesesRecentes(18); // mais recente primeiro
 
   const [unidadesSelecionadas, setUnidadesSelecionadas] = useState([]);
@@ -94,6 +94,7 @@ function Conteudo() {
       meses: mesesSelecionados,
       dias_semana: diasSemanaSelecionados.map(Number),
       unidade_ids: unidadeIdsParam,
+      linha_param: linhaFiltro || null,
     });
     if (error) console.error("Erro no relatório Pareto:", error.message);
     setDados(data || []);
@@ -102,25 +103,38 @@ function Conteudo() {
 
   useEffect(() => {
     carregar();
-  }, [unidadesSelecionadas, mesesSelecionados.join(","), diasSemanaSelecionados]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [unidadesSelecionadas, mesesSelecionados.join(","), diasSemanaSelecionados, linhaFiltro, detalharLinha]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // --- monta os dados do gráfico: uma entrada por data, com qtd/valor por unidade ---
+  // --- monta os dados do gráfico: uma entrada por data, com qtd/valor por série ---
+  // "série" = uma unidade (padrão), ou unidade+linha quando o modo é "Detalhado"
+  // (unidades com CI e IH, tipo Campinas e São Miguel, aparecem separadas, com "(IH)" no nome)
+  function chaveSerie(d) {
+    return detalharLinha ? `${d.unidade_id}::${d.linha}` : d.unidade_id;
+  }
+  function nomeSerie(d) {
+    return detalharLinha && d.linha === "ih" ? `${d.unidade_nome} (IH)` : d.unidade_nome;
+  }
+
   const datasUnicas = [...new Set(dados.map((d) => d.dia))].sort();
-  const unidadesNoResultado = [...new Map(dados.map((d) => [d.unidade_id, d.unidade_nome])).entries()];
+  const seriesMap = new Map();
+  dados.forEach((d) => seriesMap.set(chaveSerie(d), nomeSerie(d)));
+  const unidadesNoResultado = [...seriesMap.entries()]; // [chave, nomeExibido]
+
   const dadosGrafico = datasUnicas.map((dia) => {
     const dow = new Date(dia + "T12:00:00").getDay();
     const obj = { dia, rotulo: `${NOMES_DIA_CURTO[dow]} ${formatarDataCurta(dia)}` };
-    unidadesNoResultado.forEach(([id]) => {
-      const linha = dados.find((d) => d.dia === dia && d.unidade_id === id);
-      obj[`qtd_${id}`] = linha ? Number(linha.qtd) : 0;
-      obj[`valor_${id}`] = linha ? Number(linha.valor_total) : 0;
+    unidadesNoResultado.forEach(([chave]) => {
+      const linhasDoDia = dados.filter((d) => d.dia === dia && chaveSerie(d) === chave);
+      obj[`qtd_${chave}`] = linhasDoDia.reduce((s, d) => s + Number(d.qtd), 0);
+      obj[`valor_${chave}`] = linhasDoDia.reduce((s, d) => s + Number(d.valor_total), 0);
     });
     return obj;
   });
 
   const totalQtd = dados.reduce((s, d) => s + Number(d.qtd), 0);
   const totalValor = dados.reduce((s, d) => s + Number(d.valor_total), 0);
-  const nomeUnidadeUnica = unidadesNoResultado.length === 1 ? unidadesNoResultado[0][1] : null;
+  const idsUnidadesUnicas = [...new Set(dados.map((d) => d.unidade_id))];
+  const nomeUnidadeUnica = idsUnidadesUnicas.length === 1 ? dados[0]?.unidade_nome : null;
 
   return (
     <div className="w-full">
