@@ -60,6 +60,7 @@ export const NAV_OPERACAO = [
   { href: "/contas-a-receber", label: "Contas a receber", icon: Wallet, descricao: "OS com saldo em aberto, aguardando quitação." },
   { href: "/acompanhamento", label: "Acompanhamento", icon: TrendingUp, descricao: "Evolução das vendas: diário, semanal ou mensal." },
   { href: "/relatorios", label: "Relatórios", icon: FileSpreadsheet, descricao: "Exportar os dados lançados para Excel." },
+  { href: "/relatorios/pareto", label: "Pareto", icon: BarChart3, descricao: "Compare o volume e os valores por dia da semana." },
 ];
 
 export const NAV_DASHBOARD = [
@@ -93,6 +94,7 @@ const CORES_ITEM = {
   "/contas-a-receber": "#3F8A5C",
   "/acompanhamento": "#C9752E",
   "/relatorios": "#0E7A72",
+  "/relatorios/pareto": "#B8862E",
   "/dashboard/valores-diario": "#2670B5",
   "/dashboard/valores-semanal": "#3E6FB0",
   "/dashboard": "#2E5A94",
