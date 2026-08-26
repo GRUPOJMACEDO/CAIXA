@@ -44,13 +44,14 @@ function formatarDataCurta(dataIso) {
 }
 
 /** Rótulo customizado acima de cada barra: (quantidade) e o valor em R$, em destaque. */
-function RotuloBarra({ x, y, width, value, index, chaveValor, dados }) {
-  if (!value) return null;
+function RotuloBarra({ x, y, width, index, chaveQtd, chaveValor, dados }) {
+  const qtd = dados[index]?.[chaveQtd] || 0;
+  if (!qtd) return null;
   const valor = dados[index]?.[chaveValor] || 0;
   return (
     <g>
       <text x={x + width / 2} y={y - 22} textAnchor="middle" fontSize={15} fontWeight={800} fill="#1B3A5C">
-        ({value})
+        ({qtd})
       </text>
       <text x={x + width / 2} y={y - 7} textAnchor="middle" fontSize={12} fontWeight={600} fill="#3F8A5C">
         R$ {formatarMoedaSemSimbolo(valor)}
@@ -245,14 +246,18 @@ function Conteudo() {
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="#E4E7EC" />
               <XAxis dataKey="rotulo" tick={{ fontSize: 12, fontWeight: 700, fill: "#1B3A5C" }} />
-              <YAxis tick={{ fontSize: 11, fill: "#6B6D76" }} width={36} allowDecimals={false} />
-              <Tooltip formatter={(v, nome) => [v, nome]} />
+              <YAxis
+                tick={{ fontSize: 11, fill: "#6B6D76" }}
+                width={72}
+                tickFormatter={(v) => `R$ ${Number(v).toLocaleString("pt-BR", { maximumFractionDigits: 0 })}`}
+              />
+              <Tooltip formatter={(v, nome) => [`R$ ${formatarMoedaSemSimbolo(v)}`, nome]} />
               {unidadesNoResultado.length > 1 && <Legend wrapperStyle={{ fontSize: 12 }} />}
               {unidadesNoResultado.map(([id, nome], i) => (
-                <Bar key={id} dataKey={`qtd_${id}`} name={nome} fill={`url(#grad-pareto-${id})`} radius={[6, 6, 0, 0]} maxBarSize={58}>
+                <Bar key={id} dataKey={`valor_${id}`} name={nome} fill={`url(#grad-pareto-${id})`} radius={[6, 6, 0, 0]} maxBarSize={58}>
                   <LabelList
-                    dataKey={`qtd_${id}`}
-                    content={(props) => <RotuloBarra {...props} chaveValor={`valor_${id}`} dados={dadosGrafico} />}
+                    dataKey={`valor_${id}`}
+                    content={(props) => <RotuloBarra {...props} chaveQtd={`qtd_${id}`} chaveValor={`valor_${id}`} dados={dadosGrafico} />}
                   />
                 </Bar>
               ))}
