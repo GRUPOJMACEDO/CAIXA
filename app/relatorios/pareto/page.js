@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { BarChart3, Building2, Tag, CalendarRange, CalendarCheck2, Eraser } from "lucide-react";
+import { BarChart3, Building2, CalendarDays, CalendarCheck2, Eraser } from "lucide-react";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, LabelList } from "recharts";
 import AppShell from "../../../components/AppShell";
 import BotaoAtualizar from "../../../components/BotaoAtualizar";
@@ -9,16 +9,15 @@ import { useSessao } from "../../../lib/SessaoContext";
 import { formatarMoedaSemSimbolo } from "../../../lib/formato";
 import { listaMesesRecentes } from "../../../lib/fusoHorario";
 
-// 0=domingo .. 6=sábado (mesma convenção do extract(dow) do Postgres),
-// mas exibidos começando na segunda, do jeito que a gente lê a semana
+// 0=domingo .. 6=sábado (mesma convenção do extract(dow) do Postgres)
 const DIAS_SEMANA_ORDEM = [
-  { dow: 1, nome: "Segunda" },
-  { dow: 2, nome: "Terça" },
-  { dow: 3, nome: "Quarta" },
-  { dow: 4, nome: "Quinta" },
-  { dow: 5, nome: "Sexta" },
-  { dow: 6, nome: "Sábado" },
-  { dow: 0, nome: "Domingo" },
+  { dow: 1, sigla: "SEG", nome: "Segunda" },
+  { dow: 2, sigla: "TER", nome: "Terça" },
+  { dow: 3, sigla: "QUAR", nome: "Quarta" },
+  { dow: 4, sigla: "QUI", nome: "Quinta" },
+  { dow: 5, sigla: "SEX", nome: "Sexta" },
+  { dow: 6, sigla: "SAB", nome: "Sábado" },
+  { dow: 0, sigla: "DOM", nome: "Domingo" },
 ];
 const NOMES_DIA_CURTO = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 
@@ -61,36 +60,25 @@ function RotuloBarra({ x, y, width, value, index, chaveValor, dados }) {
 }
 
 function Conteudo() {
-  const { unidades, marcasDisponiveis } = useSessao();
-  const mesesAsc = [...listaMesesRecentes(18)].reverse(); // cronológico crescente, pro controle deslizante
+  const { unidades } = useSessao();
+  const mesesLista = listaMesesRecentes(18); // mais recente primeiro
 
   const [unidadesSelecionadas, setUnidadesSelecionadas] = useState([]);
-  const [marcasSelecionadas, setMarcasSelecionadas] = useState([]);
+  const [mesesSelecionados, setMesesSelecionados] = useState([mesesLista[0].valor]); // começa com o mês atual
   const [diasSemanaSelecionados, setDiasSemanaSelecionados] = useState([]);
-  const [mesAtivo, setMesAtivo] = useState(false);
-  const [idxMesInicio, setIdxMesInicio] = useState(mesesAsc.length - 1);
-  const [idxMesFim, setIdxMesFim] = useState(mesesAsc.length - 1);
   const [dados, setDados] = useState([]);
   const [carregando, setCarregando] = useState(false);
 
-  const mesesSelecionados = mesAtivo
-    ? mesesAsc.slice(Math.min(idxMesInicio, idxMesFim), Math.max(idxMesInicio, idxMesFim) + 1).map((m) => m.valor)
-    : [];
+  function alternarDiaSemana(dow) {
+    const chave = String(dow);
+    setDiasSemanaSelecionados((atual) => (atual.includes(chave) ? atual.filter((d) => d !== chave) : [...atual, chave]));
+  }
 
   function limparSelecao() {
     setUnidadesSelecionadas([]);
-    setMarcasSelecionadas([]);
+    setMesesSelecionados([mesesLista[0].valor]);
     setDiasSemanaSelecionados([]);
-    setMesAtivo(false);
-    setIdxMesInicio(mesesAsc.length - 1);
-    setIdxMesFim(mesesAsc.length - 1);
     setDados([]);
-  }
-
-  function aoMoverMes(tipo, valor) {
-    setMesAtivo(true);
-    if (tipo === "inicio") setIdxMesInicio(valor);
-    else setIdxMesFim(valor);
   }
 
   async function carregar() {
@@ -99,11 +87,7 @@ function Conteudo() {
       return;
     }
     setCarregando(true);
-
-    const idsPorMarca = new Set();
-    marcasSelecionadas.forEach((m) => unidades.filter((u) => u.nome.startsWith(m)).forEach((u) => idsPorMarca.add(u.id)));
-    const idsEfetivos = new Set([...unidadesSelecionadas, ...idsPorMarca]);
-    const unidadeIdsParam = idsEfetivos.size > 0 ? [...idsEfetivos] : null;
+    const unidadeIdsParam = unidadesSelecionadas.length > 0 ? unidadesSelecionadas : null;
 
     const { data, error } = await supabase.rpc("relatorio_pareto_por_data", {
       meses: mesesSelecionados,
@@ -117,7 +101,7 @@ function Conteudo() {
 
   useEffect(() => {
     carregar();
-  }, [unidadesSelecionadas, marcasSelecionadas, mesesSelecionados.join(","), diasSemanaSelecionados]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [unidadesSelecionadas, mesesSelecionados.join(","), diasSemanaSelecionados]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // --- monta os dados do gráfico: uma entrada por data, com qtd/valor por unidade ---
   const datasUnicas = [...new Set(dados.map((d) => d.dia))].sort();
@@ -138,7 +122,7 @@ function Conteudo() {
   const nomeUnidadeUnica = unidadesNoResultado.length === 1 ? unidadesNoResultado[0][1] : null;
 
   return (
-    <div className="max-w-6xl">
+    <div className="w-full">
       <div className="mb-5 flex items-start justify-between gap-4">
         <div className="min-w-0">
           <p className="text-xs uppercase tracking-wider text-muted mb-1">Operação</p>
@@ -147,17 +131,32 @@ function Conteudo() {
           </h1>
           <p className="text-sm text-muted mt-1">Compare o volume e os valores recebidos entre as ocorrências do(s) dia(s) da semana escolhido(s).</p>
         </div>
-        <BotaoAtualizar aoAtualizar={carregar} />
+        <div className="flex items-center gap-2 shrink-0">
+          <BotaoAtualizar aoAtualizar={carregar} />
+          <button
+            onClick={limparSelecao}
+            title="Limpar seleção"
+            className="group inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium text-white
+              bg-gradient-to-b from-[#8B96A8] to-[#5B6B84]
+              shadow-[0_3px_0_0_rgba(0,0,0,0.18),0_8px_16px_-4px_rgba(91,107,132,0.55)]
+              hover:brightness-105 hover:-translate-y-0.5
+              active:translate-y-0 active:shadow-[0_1px_0_0_rgba(0,0,0,0.18),0_4px_8px_-2px_rgba(91,107,132,0.5)]
+              transition-all duration-150"
+          >
+            <Eraser size={15} />
+            Limpar seleção
+          </button>
+        </div>
       </div>
 
       {/* Filtros — tudo numa linha só */}
       <div className="card p-4 mb-5">
-        <div className="flex items-end gap-4 flex-wrap">
-          <div className="min-w-[220px] flex-1">
+        <div className="flex items-start gap-4 flex-wrap">
+          <div className="min-w-[260px] flex-1">
             <p className="text-[11px] font-semibold text-muted uppercase tracking-wide mb-1.5 flex items-center gap-1"><Building2 size={11} /> Unidades</p>
             <select
               multiple
-              size={5}
+              size={3}
               className="field-input text-sm w-full"
               value={unidadesSelecionadas}
               onChange={(e) => setUnidadesSelecionadas([...e.target.selectedOptions].map((o) => o.value))}
@@ -166,75 +165,43 @@ function Conteudo() {
                 <option key={u.id} value={u.id}>{u.nome}</option>
               ))}
             </select>
-            <p className="text-[10px] text-muted mt-1">Clique segurando Shift ou Ctrl pra marcar várias.</p>
+            <p className="text-[10px] text-muted mt-1">Nenhuma marcada = todas. Shift ou Ctrl + clique pra marcar várias.</p>
           </div>
 
-          {marcasDisponiveis.length > 1 && (
-            <div className="min-w-[100px]">
-              <p className="text-[11px] font-semibold text-muted uppercase tracking-wide mb-1.5 flex items-center gap-1"><Tag size={11} /> Marca</p>
-              <select
-                multiple
-                size={5}
-                className="field-input text-sm w-full"
-                value={marcasSelecionadas}
-                onChange={(e) => setMarcasSelecionadas([...e.target.selectedOptions].map((o) => o.value))}
-              >
-                {marcasDisponiveis.map((m) => (
-                  <option key={m} value={m}>{m}</option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          <div className="min-w-[220px]">
-            <p className="text-[11px] font-semibold text-muted uppercase tracking-wide mb-1.5 flex items-center gap-1"><CalendarRange size={11} /> Mês (de / até)</p>
-            <div className="bg-canvas rounded-lg border border-line px-3 py-2.5 w-full">
-              <p className="text-xs font-mono-num text-center text-ink font-medium mb-1.5">
-                {mesAtivo ? `${mesesAsc[Math.min(idxMesInicio, idxMesFim)].rotulo} até ${mesesAsc[Math.max(idxMesInicio, idxMesFim)].rotulo}` : "Nenhum mês selecionado"}
-              </p>
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] text-muted w-6">De</span>
-                <input
-                  type="range"
-                  min={0}
-                  max={mesesAsc.length - 1}
-                  value={idxMesInicio}
-                  onChange={(e) => aoMoverMes("inicio", Number(e.target.value))}
-                  className="w-full accent-[#B8862E]"
-                />
-              </div>
-              <div className="flex items-center gap-2 mt-1">
-                <span className="text-[10px] text-muted w-6">Até</span>
-                <input
-                  type="range"
-                  min={0}
-                  max={mesesAsc.length - 1}
-                  value={idxMesFim}
-                  onChange={(e) => aoMoverMes("fim", Number(e.target.value))}
-                  className="w-full accent-[#B8862E]"
-                />
-              </div>
-            </div>
-          </div>
-
-          <div className="min-w-[130px]">
-            <p className="text-[11px] font-semibold text-muted uppercase tracking-wide mb-1.5 flex items-center gap-1"><CalendarCheck2 size={11} /> Dia da semana</p>
+          <div className="min-w-[180px]">
+            <p className="text-[11px] font-semibold text-muted uppercase tracking-wide mb-1.5 flex items-center gap-1"><CalendarDays size={11} /> Mês</p>
             <select
               multiple
-              size={5}
+              size={3}
               className="field-input text-sm w-full"
-              value={diasSemanaSelecionados}
-              onChange={(e) => setDiasSemanaSelecionados([...e.target.selectedOptions].map((o) => o.value))}
+              value={mesesSelecionados}
+              onChange={(e) => setMesesSelecionados([...e.target.selectedOptions].map((o) => o.value))}
             >
-              {DIAS_SEMANA_ORDEM.map((d) => (
-                <option key={d.dow} value={d.dow}>{d.nome}</option>
+              {mesesLista.map((m) => (
+                <option key={m.valor} value={m.valor}>{m.rotulo}</option>
               ))}
             </select>
+            <p className="text-[10px] text-muted mt-1">Shift + clique pra marcar vários meses.</p>
           </div>
 
-          <button onClick={limparSelecao} className="btn flex items-center gap-1.5 text-sm h-9">
-            <Eraser size={14} /> Limpar seleção
-          </button>
+          <div className="w-[220px]">
+            <p className="text-[11px] font-semibold text-muted uppercase tracking-wide mb-1.5 flex items-center gap-1"><CalendarCheck2 size={11} /> Dia da semana</p>
+            <div className="grid grid-cols-4 gap-1">
+              {DIAS_SEMANA_ORDEM.map((d) => {
+                const marcado = diasSemanaSelecionados.includes(String(d.dow));
+                return (
+                  <label
+                    key={d.dow}
+                    title={d.nome}
+                    className={`checkbox-tile justify-center text-xs font-semibold py-1.5 px-0 ${marcado ? "is-checked" : ""}`}
+                  >
+                    <input type="checkbox" className="sr-only" checked={marcado} onChange={() => alternarDiaSemana(d.dow)} />
+                    {d.sigla}
+                  </label>
+                );
+              })}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -262,7 +229,7 @@ function Conteudo() {
         ) : dadosGrafico.length === 0 ? (
           <p className="text-sm text-muted py-16 text-center">Nenhum lançamento encontrado para esses filtros.</p>
         ) : (
-          <ResponsiveContainer width="100%" height={Math.max(380, 70 + unidadesNoResultado.length * 4)}>
+          <ResponsiveContainer width="100%" height={Math.max(420, 70 + unidadesNoResultado.length * 4)}>
             <BarChart data={dadosGrafico} margin={{ top: 44, right: 20, left: 0, bottom: 8 }} barGap={4}>
               <defs>
                 {unidadesNoResultado.map(([id], i) => {
