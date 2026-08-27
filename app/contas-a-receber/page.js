@@ -41,6 +41,7 @@ function ConteudoContasAReceber() {
   const [excluindo, setExcluindo] = useState(false);
   const [motivoExclusao, setMotivoExclusao] = useState("");
   const [processandoExclusao, setProcessandoExclusao] = useState(false);
+  const [unidadeExpandida, setUnidadeExpandida] = useState(null); // { id, nome } — pop-up de resumo por unidade
   const podeExcluir = podeExcluirLancamento(usuario.cargo);
   const unidadesMap = Object.fromEntries(unidades.map((u) => [u.id, u.nome]));
   const mostrarUnidade = podeVerTodasUnidades(usuario.cargo) || unidades.length > 1;
@@ -78,6 +79,25 @@ function ConteudoContasAReceber() {
   const totalOrcamento = linhasFiltradas.reduce((s, l) => s + Number(l.orcamento_aprovado), 0);
   const totalFalta = linhasFiltradas.reduce((s, l) => s + Number(l.falta_pagar), 0);
   const percentualFalta = totalOrcamento ? (totalFalta / totalOrcamento) * 100 : 0;
+
+  // resumo por unidade — só pra quem tem acesso a mais de uma unidade e está
+  // olhando "todas" (sem escolher uma específica no filtro)
+  const mostrarResumoUnidades = unidades.length > 1 && !filtroUnidade;
+  const resumoPorUnidade = unidades
+    .map((u) => {
+      const doUnidade = linhas.filter((l) => l.unidade_id === u.id);
+      return {
+        id: u.id,
+        nome: u.nome,
+        orcamento: doUnidade.reduce((s, l) => s + Number(l.orcamento_aprovado), 0),
+        pago: doUnidade.reduce((s, l) => s + Number(l.total_pago), 0),
+        falta: doUnidade.reduce((s, l) => s + Number(l.falta_pagar), 0),
+        qtdOs: doUnidade.length,
+      };
+    })
+    .filter((u) => u.qtdOs > 0)
+    .sort((a, b) => b.falta - a.falta);
+  const linhasDaUnidadeExpandida = unidadeExpandida ? linhas.filter((l) => l.unidade_id === unidadeExpandida.id) : [];
 
   async function carregarHistorico(unidadeId, numeroOs, tipoServicoId, linhaCiIh) {
     setCarregandoHistorico(true);
@@ -292,6 +312,37 @@ function ConteudoContasAReceber() {
       </div>
 
       <div className="card overflow-hidden">
+        {mostrarResumoUnidades ? (
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-xs uppercase tracking-wider text-muted border-b border-line">
+                <td className="p-3">Unidade</td>
+                <td className="p-3 text-right">Orçamento</td>
+                <td className="p-3 text-right"><span className="text-[#3F8A5C] font-bold bg-[#3F8A5C]/10 rounded px-2 py-0.5">Pago</span></td>
+                <td className="p-3 text-right">Falta pagar</td>
+                <td className="p-3 text-right">OS em aberto</td>
+              </tr>
+            </thead>
+            <tbody>
+              {resumoPorUnidade.length === 0 && (
+                <tr><td className="p-4 text-muted" colSpan={5}>Nenhuma OS em aberto.</td></tr>
+              )}
+              {resumoPorUnidade.map((u) => (
+                <tr
+                  key={u.id}
+                  className="border-t border-line hover:bg-canvas/60 cursor-pointer"
+                  onClick={() => setUnidadeExpandida({ id: u.id, nome: u.nome })}
+                >
+                  <td className="p-3 font-medium">{u.nome}</td>
+                  <td className="p-3 text-right font-mono-num">R$ {formatarMoedaSemSimbolo(u.orcamento)}</td>
+                  <td className="p-3 text-right font-mono-num font-bold text-[#2E6B45] bg-[#3F8A5C]/5">R$ {formatarMoedaSemSimbolo(u.pago)}</td>
+                  <td className="p-3 text-right font-mono-num font-bold text-bronze bg-bronze/5">R$ {formatarMoedaSemSimbolo(u.falta)}</td>
+                  <td className="p-3 text-right font-mono-num text-muted">{u.qtdOs}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
         <table className="w-full text-sm">
           <thead>
             <tr className="text-xs uppercase tracking-wider text-muted border-b border-line">
@@ -332,7 +383,49 @@ function ConteudoContasAReceber() {
             ))}
           </tbody>
         </table>
+        )}
       </div>
+
+      {unidadeExpandida && (
+        <Modal titulo={unidadeExpandida.nome} subtitulo={`${linhasDaUnidadeExpandida.length} OS em aberto`} onFechar={() => setUnidadeExpandida(null)} largura="max-w-3xl">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-xs uppercase tracking-wider text-muted border-b border-line">
+                <td className="pb-2">Nº OS</td>
+                <td className="pb-2">Tipo de serviço</td>
+                <td className="pb-2 text-right">Orçamento</td>
+                <td className="pb-2 text-right"><span className="text-[#3F8A5C] font-bold bg-[#3F8A5C]/10 rounded px-2 py-0.5">Pago</span></td>
+                <td className="pb-2 text-right">Falta pagar</td>
+                <td className="pb-2">Último lançamento</td>
+              </tr>
+            </thead>
+            <tbody>
+              {linhasDaUnidadeExpandida.map((l) => (
+                <tr
+                  key={`${l.unidade_id}-${l.numero_os}-${l.tipo_servico_id}-${l.linha}`}
+                  className="border-t border-line hover:bg-canvas/60 cursor-pointer"
+                  onClick={() => {
+                    setUnidadeExpandida(null);
+                    abrirPopup(l);
+                  }}
+                >
+                  <td className="py-2 font-mono-num">{l.numero_os}</td>
+                  <td className="py-2 text-xs text-muted">
+                    {l.tipo_servico_nome || "—"}{" "}
+                    {l.linha === "ih" && (
+                      <span className="text-[9px] px-1.5 py-0.5 rounded font-medium bg-teal-soft text-teal">IH</span>
+                    )}
+                  </td>
+                  <td className="py-2 text-right font-mono-num">R$ {formatarMoedaSemSimbolo(l.orcamento_aprovado)}</td>
+                  <td className="py-2 text-right font-mono-num font-bold text-[#2E6B45] bg-[#3F8A5C]/5">R$ {formatarMoedaSemSimbolo(l.total_pago)}</td>
+                  <td className="py-2 text-right font-mono-num font-medium text-bronze">R$ {formatarMoedaSemSimbolo(l.falta_pagar)}</td>
+                  <td className="py-2 text-muted">{formatarDataBR(l.ultimo_lancamento)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Modal>
+      )}
 
       {selecionada && (
         <Modal
