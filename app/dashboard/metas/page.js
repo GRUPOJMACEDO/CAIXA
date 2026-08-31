@@ -169,7 +169,7 @@ function ConteudoMetas() {
                     return (
                       <div key={`${item.unidade_id}-${item.linha}`} className="flex items-center gap-3 px-4 py-3 text-sm">
                         <span className="text-muted font-mono-num text-xs w-6 shrink-0">{offset + i + 4}º</span>
-                        <span className={`w-36 shrink-0 truncate flex items-center gap-1.5 ${semMeta ? "text-muted" : ""}`}>
+                        <span className={`shrink-0 whitespace-nowrap flex items-center gap-1.5 ${semMeta ? "text-muted" : ""}`}>
                           {item.unidade_nome}
                           {item.linha === "ih" && (
                     <span className="text-[9px] px-1 py-0.5 rounded font-medium shrink-0 bg-teal-soft text-teal">
