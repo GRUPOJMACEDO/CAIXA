@@ -71,8 +71,7 @@ function Conteudo() {
         "id, data, numero_os, valor_pago, orcamento_aprovado, forma_pagamento, parcelas, bandeira, formas_pagamento, observacoes, linha, unidade_id, categoria_id, tipo_servico_id, atendente_id, unidades(nome), categorias(nome), tipos_servico(nome), usuarios!atendente_id(nome_completo)"
       )
       .in("unidade_id", unidadeId ? [unidadeId] : unidades.map((u) => u.id))
-      .order("data", { ascending: false })
-      .limit(300);
+      .order("data", { ascending: false });
 
     if (linhaFiltro) query = query.eq("linha", linhaFiltro);
     if (numeroOs.trim()) query = query.ilike("numero_os", `%${numeroOs.trim().toUpperCase()}%`);
