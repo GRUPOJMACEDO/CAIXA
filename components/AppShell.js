@@ -30,6 +30,7 @@ import {
   DatabaseZap,
   Briefcase,
   BarChart3,
+  ShieldAlert,
 } from "lucide-react";
 import BotaoModoClaroEscuro from "./BotaoModoClaroEscuro";
 import SinoSolicitacoesSenha from "./SinoSolicitacoesSenha";
@@ -52,6 +53,7 @@ import {
   podeVerLogAuditoria,
   podeVerManutencao,
   podeVerEstatisticas,
+  podeVerAuditoriaRetroativos,
 } from "../lib/permissions";
 
 export const NAV_OPERACAO = [
@@ -84,6 +86,7 @@ export function navConfiguracoes(cargo) {
   if (podeVerLogAuditoria(cargo)) itens.push({ href: "/configuracoes/log", label: "Log do sistema", icon: ScrollText, descricao: "Histórico de alterações no sistema." });
   if (podeVerManutencao(cargo)) itens.push({ href: "/configuracoes/manutencao", label: "Manutenção do banco", icon: DatabaseZap, descricao: "Apagar dados de teste antes de usar o sistema de verdade." });
   if (podeVerEstatisticas(cargo)) itens.push({ href: "/configuracoes/estatisticas", label: "Estatísticas", icon: BarChart3, descricao: "Métricas e tendências de uso do sistema." });
+  if (podeVerAuditoriaRetroativos(cargo)) itens.push({ href: "/configuracoes/auditoria-retroativos", label: "Lançamentos retroativos", icon: ShieldAlert, descricao: "Quem está lançando com data anterior ao dia atual." });
   return itens;
 }
 
@@ -111,6 +114,7 @@ const CORES_ITEM = {
   "/configuracoes/log": "#7C819C",
   "/configuracoes/manutencao": "#B23B2E",
   "/configuracoes/estatisticas": "#2E6B7A",
+  "/configuracoes/auditoria-retroativos": "#B23B2E",
 };
 
 const CORES_SECAO = {

@@ -45,7 +45,7 @@ function Conteudo() {
   const minhasUnidadesIds = minhasUnidades.map((u) => u.id);
   const unidadesSelecionaveis = souGestorLimitado ? unidades.filter((u) => minhasUnidadesIds.includes(u.id)) : unidades;
   const cargosAtribuiveis = souGestorLimitado
-    ? Object.values(CARGOS).filter((c) => ![CARGOS.ADM, CARGOS.ADMINISTRADOR, CARGOS.DIRETOR].includes(c))
+    ? Object.values(CARGOS).filter((c) => ![CARGOS.ADM, CARGOS.ADMINISTRADOR, CARGOS.DIRETOR, CARGOS.AUDITORIA].includes(c))
     : Object.values(CARGOS);
 
   const edAcessoTodas = podeVerTodasUnidades(edCargo);
