@@ -1,6 +1,6 @@
 "use client";
-import { useEffect, useState } from "react";
-import { ShieldAlert, Building2, Briefcase, User, Hash, Percent, Clock, Trophy, Eraser, ArrowDownAZ, ArrowUpAZ, BarChart3 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { ShieldAlert, Building2, Briefcase, User, Hash, Percent, Clock, Trophy, Eraser, ArrowDownAZ, ArrowUpAZ, BarChart3, ChevronDown } from "lucide-react";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from "recharts";
 import AppShell from "../../../components/AppShell";
 import BotaoAtualizar from "../../../components/BotaoAtualizar";
@@ -8,7 +8,7 @@ import { supabase } from "../../../lib/supabaseClient";
 import { useSessao } from "../../../lib/SessaoContext";
 import { CARGOS, CARGO_LABELS, podeVerAuditoriaRetroativos } from "../../../lib/permissions";
 import { formatarMoedaSemSimbolo, formatarDataBR } from "../../../lib/formato";
-import { hojeBrasil } from "../../../lib/fusoHorario";
+import { hojeBrasil, numeroDaSemana } from "../../../lib/fusoHorario";
 
 function formatarDataHora(iso) {
   if (!iso) return "—";
@@ -36,6 +36,73 @@ function formatarDataCurta(dataIso) {
 function formatarMesCurto(chaveMes) {
   const [ano, mes] = chaveMes.split("-");
   return `${mes}/${ano}`;
+}
+
+function clarear(hex, pct) {
+  const num = parseInt(hex.replace("#", ""), 16);
+  const r = Math.min(255, Math.round(((num >> 16) & 255) + (255 - ((num >> 16) & 255)) * pct));
+  const g = Math.min(255, Math.round(((num >> 8) & 255) + (255 - ((num >> 8) & 255)) * pct));
+  const b = Math.min(255, Math.round((num & 255) + (255 - (num & 255)) * pct));
+  return `rgb(${r},${g},${b})`;
+}
+function escurecer(hex, pct) {
+  const num = parseInt(hex.replace("#", ""), 16);
+  const r = Math.round(((num >> 16) & 255) * (1 - pct));
+  const g = Math.round(((num >> 8) & 255) * (1 - pct));
+  const b = Math.round((num & 255) * (1 - pct));
+  return `rgb(${r},${g},${b})`;
+}
+
+/** Seletor de múltipla escolha, suspenso — abre numa linha, fecha ao marcar uma opção. */
+function SeletorSuspenso({ rotulo, icone: Icone, opcoes, selecionados, onChange }) {
+  const [aberto, setAberto] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    function aoClicarFora(e) {
+      if (ref.current && !ref.current.contains(e.target)) setAberto(false);
+    }
+    window.addEventListener("mousedown", aoClicarFora);
+    return () => window.removeEventListener("mousedown", aoClicarFora);
+  }, []);
+
+  function alternar(valor) {
+    onChange(selecionados.includes(valor) ? selecionados.filter((v) => v !== valor) : [...selecionados, valor]);
+    setAberto(false);
+  }
+
+  const rotuloBotao =
+    selecionados.length === 0
+      ? "Todas"
+      : selecionados.length === 1
+        ? opcoes.find((o) => o.valor === selecionados[0])?.rotulo || "1 selecionada"
+        : `${selecionados.length} selecionadas`;
+
+  return (
+    <div className="relative flex-1 min-w-[200px]" ref={ref}>
+      <p className="text-[11px] font-semibold text-muted uppercase tracking-wide mb-1.5 flex items-center gap-1">
+        {Icone && <Icone size={11} />} {rotulo}
+      </p>
+      <button
+        type="button"
+        onClick={() => setAberto((v) => !v)}
+        className="field-input text-sm w-full flex items-center justify-between text-left"
+      >
+        <span className="truncate">{rotuloBotao}</span>
+        <ChevronDown size={14} className={`shrink-0 transition-transform ${aberto ? "rotate-180" : ""}`} />
+      </button>
+      {aberto && (
+        <div className="absolute z-20 mt-1 w-full max-h-56 overflow-y-auto bg-white border border-line rounded-lg shadow-lg">
+          {opcoes.map((o) => (
+            <label key={o.valor} className="flex items-center gap-2 px-3 py-2 text-sm hover:bg-canvas cursor-pointer">
+              <input type="checkbox" checked={selecionados.includes(o.valor)} onChange={() => alternar(o.valor)} />
+              {o.rotulo}
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 const GRANULARIDADES = [
@@ -172,7 +239,8 @@ function Conteudo() {
 
   // --- pivô do gráfico comparativo, agrupado pela granularidade escolhida ---
   const chaveBucket = (dia) => (granularidadeGrafico === "mes" ? dia.slice(0, 7) : granularidadeGrafico === "semana" ? inicioDaSemanaDe(dia) : dia);
-  const rotuloBucket = (chave) => (granularidadeGrafico === "mes" ? formatarMesCurto(chave) : formatarDataCurta(chave));
+  const rotuloBucket = (chave) =>
+    granularidadeGrafico === "mes" ? formatarMesCurto(chave) : granularidadeGrafico === "semana" ? `W${numeroDaSemana(chave)}` : formatarDataCurta(chave);
   const buckets = new Map();
   comparativo.forEach((c) => {
     const chave = chaveBucket(c.dia);
@@ -213,55 +281,32 @@ function Conteudo() {
         </div>
       </div>
 
-      {/* Filtros — numa linha só */}
+      {/* Filtros — numa linha só, suspensos */}
       <div className="card p-4 mb-5">
-        <div className="flex items-start gap-3 flex-nowrap overflow-x-auto">
-          <div className="min-w-[220px] flex-1">
-            <p className="text-[11px] font-semibold text-muted uppercase tracking-wide mb-1.5 flex items-center gap-1"><Building2 size={11} /> Unidades</p>
-            <select
-              multiple
-              size={3}
-              className="field-input text-sm w-full"
-              value={unidadesSelecionadas}
-              onChange={(e) => setUnidadesSelecionadas([...e.target.selectedOptions].map((o) => o.value))}
-            >
-              {unidades.map((u) => (
-                <option key={u.id} value={u.id}>{u.nome}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="min-w-[160px]">
-            <p className="text-[11px] font-semibold text-muted uppercase tracking-wide mb-1.5 flex items-center gap-1"><Briefcase size={11} /> Cargo</p>
-            <select
-              multiple
-              size={3}
-              className="field-input text-sm w-full"
-              value={cargosSelecionados}
-              onChange={(e) => setCargosSelecionados([...e.target.selectedOptions].map((o) => o.value))}
-            >
-              {Object.values(CARGOS).map((c) => (
-                <option key={c} value={c}>{CARGO_LABELS[c]}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="min-w-[220px] flex-1">
-            <p className="text-[11px] font-semibold text-muted uppercase tracking-wide mb-1.5 flex items-center gap-1"><User size={11} /> Usuário</p>
-            <select
-              multiple
-              size={3}
-              className="field-input text-sm w-full"
-              value={usuariosSelecionados}
-              onChange={(e) => setUsuariosSelecionados([...e.target.selectedOptions].map((o) => o.value))}
-            >
-              {usuariosLista.map((u) => (
-                <option key={u.id} value={u.id}>{u.nome_completo} (@{u.login})</option>
-              ))}
-            </select>
-          </div>
+        <div className="flex items-start gap-3 flex-wrap">
+          <SeletorSuspenso
+            rotulo="Unidades"
+            icone={Building2}
+            opcoes={unidades.map((u) => ({ valor: u.id, rotulo: u.nome }))}
+            selecionados={unidadesSelecionadas}
+            onChange={setUnidadesSelecionadas}
+          />
+          <SeletorSuspenso
+            rotulo="Cargo"
+            icone={Briefcase}
+            opcoes={Object.values(CARGOS).map((c) => ({ valor: c, rotulo: CARGO_LABELS[c] }))}
+            selecionados={cargosSelecionados}
+            onChange={setCargosSelecionados}
+          />
+          <SeletorSuspenso
+            rotulo="Usuário"
+            icone={User}
+            opcoes={usuariosLista.map((u) => ({ valor: u.id, rotulo: `${u.nome_completo} (@${u.login})` }))}
+            selecionados={usuariosSelecionados}
+            onChange={setUsuariosSelecionados}
+          />
         </div>
-        <p className="text-[10px] text-muted mt-1.5">Nenhuma opção marcada num filtro = considera todas. Shift ou Ctrl + clique pra marcar várias.</p>
+        <p className="text-[10px] text-muted mt-2">Nenhuma opção marcada num filtro = considera todas.</p>
       </div>
 
       {/* Resumo */}
@@ -311,21 +356,37 @@ function Conteudo() {
               ))}
             </div>
           </div>
-          <p className="text-xs text-muted mb-4">Verde = valor lançado na data certa. Vermelho = valor lançado com data retroativa.</p>
+          <p className="text-xs text-muted mb-4">Azul = valor lançado na data certa. Laranja = valor lançado com data retroativa.</p>
           {carregandoGrafico ? (
             <p className="text-sm text-muted py-12 text-center">Carregando…</p>
           ) : dadosGraficoComparativo.length === 0 ? (
             <p className="text-sm text-muted py-12 text-center">Sem lançamentos nesse período.</p>
           ) : (
-            <ResponsiveContainer width="100%" height={Math.max(220, dadosGraficoComparativo.length * 26)}>
-              <BarChart data={dadosGraficoComparativo} layout="vertical" margin={{ top: 5, right: 20, left: 10, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#E4E7EC" horizontal={false} />
-                <XAxis type="number" tick={{ fontSize: 10, fill: "#6B6D76" }} tickFormatter={(v) => `R$ ${Number(v).toLocaleString("pt-BR", { maximumFractionDigits: 0 })}`} />
-                <YAxis type="category" dataKey="rotulo" tick={{ fontSize: 11, fill: "#6B6D76" }} width={70} />
+            <ResponsiveContainer width="100%" height={320}>
+              <BarChart data={dadosGraficoComparativo} margin={{ top: 10, right: 20, left: 0, bottom: 0 }} barGap={4}>
+                <defs>
+                  <linearGradient id="grad-em-dia" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={clarear("#2670B5", 0.55)} />
+                    <stop offset="45%" stopColor="#2670B5" />
+                    <stop offset="100%" stopColor={escurecer("#2670B5", 0.28)} />
+                  </linearGradient>
+                  <linearGradient id="grad-retroativo" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={clarear("#B8621E", 0.55)} />
+                    <stop offset="45%" stopColor="#B8621E" />
+                    <stop offset="100%" stopColor={escurecer("#B8621E", 0.28)} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#E4E7EC" />
+                <XAxis dataKey="rotulo" tick={{ fontSize: 11, fill: "#6B6D76" }} />
+                <YAxis
+                  tick={{ fontSize: 11, fill: "#6B6D76" }}
+                  width={70}
+                  tickFormatter={(v) => `R$ ${Number(v).toLocaleString("pt-BR", { maximumFractionDigits: 0 })}`}
+                />
                 <Tooltip formatter={(v, nome) => [`R$ ${formatarMoedaSemSimbolo(v)}`, nome]} />
                 <Legend wrapperStyle={{ fontSize: 12 }} />
-                <Bar dataKey="Em dia" fill="#3F8A5C" radius={[0, 4, 4, 0]} maxBarSize={16} />
-                <Bar dataKey="Retroativo" fill="#B23B2E" radius={[0, 4, 4, 0]} maxBarSize={16} />
+                <Bar dataKey="Em dia" fill="url(#grad-em-dia)" radius={[6, 6, 0, 0]} maxBarSize={54} />
+                <Bar dataKey="Retroativo" fill="url(#grad-retroativo)" radius={[6, 6, 0, 0]} maxBarSize={54} />
               </BarChart>
             </ResponsiveContainer>
           )}
