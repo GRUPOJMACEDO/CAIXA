@@ -10,6 +10,7 @@ import { useSessao } from "../../../lib/SessaoContext";
 import { CARGOS } from "../../../lib/permissions";
 import { formatarMoedaSemSimbolo, formatarDataBR, mesReferenciaLabel } from "../../../lib/formato";
 import { filtrarPorMarca } from "../../../lib/agregacaoValores";
+import { listaSemanasRecentes, listaMesesRecentes } from "../../../lib/fusoHorario";
 
 function mesclarPorAtendenteUnidade(linhas) {
   const mapa = new Map();
@@ -40,6 +41,12 @@ function inicioMes() {
   return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10);
 }
 
+function diaSeguinte(dataIso) {
+  const d = new Date(dataIso + "T12:00:00");
+  d.setDate(d.getDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
+
 const MEDALHA = ["text-gold", "text-prata", "text-bronze"];
 const CARGOS_GESTAO = [CARGOS.SUPERVISAO, CARGOS.GERENCIA, CARGOS.ADM, CARGOS.ADMINISTRADOR, CARGOS.DIRETOR];
 
@@ -51,6 +58,11 @@ const ABAS = [
 function ConteudoVendedores() {
   const { usuario, unidades, linhaFiltro, marcasFiltro, detalharLinha } = useSessao();
   const [aba, setAba] = useState("orcamentos");
+  const semanas = listaSemanasRecentes(16);
+  const meses = listaMesesRecentes(18);
+  const [tipoPeriodo, setTipoPeriodo] = useState("mes"); // "semana" | "mes"
+  const [semanaSelecionada, setSemanaSelecionada] = useState(semanas[0].valor);
+  const [mesSelecionado, setMesSelecionado] = useState(meses[0].valor);
   const [linhas, setLinhas] = useState([]);
   const [carregando, setCarregando] = useState(true);
   const [detalhe, setDetalhe] = useState(null);
@@ -63,11 +75,25 @@ function ConteudoVendedores() {
   const idsAutorizados = new Set(unidades.map((u) => u.id));
   const abaAtual = ABAS.find((a) => a.id === aba);
 
+  const intervalo =
+    tipoPeriodo === "semana"
+      ? (() => {
+          const s = semanas.find((s) => s.valor === semanaSelecionada) || semanas[0];
+          return { inicio: s.inicio, fimExcl: diaSeguinte(s.fim), rotulo: `Semana ${s.rotulo}` };
+        })()
+      : (() => {
+          const m = meses.find((m) => m.valor === mesSelecionado) || meses[0];
+          return { inicio: m.inicio, fimExcl: m.fimExclusivo, rotulo: m.rotulo };
+        })();
+
   async function carregar() {
     setCarregando(true);
-    let query = supabase.from(abaAtual.view).select("*");
-    if (linhaFiltro) query = query.eq("linha", linhaFiltro);
-    const { data } = await query;
+    const { data } = await supabase.rpc("vendedores_por_periodo", {
+      data_inicio: intervalo.inicio,
+      data_fim_excl: intervalo.fimExcl,
+      linha_param: linhaFiltro || null,
+      somente_acessorio: !!abaAtual.categoria,
+    });
     const base = filtrarPorMarca(linhaFiltro || detalharLinha ? data || [] : mesclarPorAtendenteUnidade(data || []), marcasFiltro);
     const lista = base
       .map((v) => ({ ...v, falta: Number(v.orcamento_aprovado) - Number(v.valor_pago), premio: Number(v.valor_pago) * 0.05 }))
@@ -79,7 +105,7 @@ function ConteudoVendedores() {
 
   useEffect(() => {
     carregar();
-  }, [aba, linhaFiltro, marcasFiltro, detalharLinha]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [aba, linhaFiltro, marcasFiltro, detalharLinha, tipoPeriodo, semanaSelecionada, mesSelecionado]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const mapaUnidades = new Map();
   linhas.forEach((l) => mapaUnidades.set(l.unidade_id, l.unidade_nome));
@@ -106,7 +132,8 @@ function ConteudoVendedores() {
       .select("id, data, numero_os, unidade_id, atendente_id, linha, valor_pago, tipos_servico(nome)")
       .in("unidade_id", unidadeIds)
       .in("atendente_id", atendenteIds)
-      .gte("data", inicioMes())
+      .gte("data", intervalo.inicio)
+      .lt("data", intervalo.fimExcl)
       .order("data", { ascending: false });
 
     if (linhaFiltro) query = query.eq("linha", linhaFiltro);
@@ -169,7 +196,7 @@ function ConteudoVendedores() {
     const livro = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(livro, planilha, "Vendedores");
     const sufixoUnidade = unidadeFiltro ? `-${(mapaUnidades.get(unidadeFiltro) || "unidade").replace(/\s+/g, "_")}` : "";
-    XLSX.writeFile(livro, `vendedores-${abaAtual.id}${sufixoUnidade}-${mesReferenciaLabel(inicioMes()).replace(/\s+/g, "_")}.xlsx`);
+    XLSX.writeFile(livro, `vendedores-${abaAtual.id}${sufixoUnidade}-${intervalo.rotulo.replace(/\s+/g, "_")}.xlsx`);
   }
 
   async function imprimirTela() {
@@ -194,7 +221,8 @@ function ConteudoVendedores() {
       .select("id, data, numero_os, orcamento_aprovado, valor_pago, tipos_servico(nome)")
       .eq("unidade_id", linha.unidade_id)
       .eq("atendente_id", linha.usuario_id)
-      .gte("data", inicioMes())
+      .gte("data", intervalo.inicio)
+      .lt("data", intervalo.fimExcl)
       .order("data", { ascending: false });
     if (linha.linha) query = query.eq("linha", linha.linha);
 
@@ -216,7 +244,7 @@ function ConteudoVendedores() {
       <div className="mb-5 flex items-start justify-between gap-4">
         <div>
           <p className="text-xs uppercase tracking-wider text-muted mb-1">Dashboard</p>
-          <h1 className="font-display text-2xl font-semibold text-ink">Vendedores de {mesReferenciaLabel(inicioMes())}</h1>
+          <h1 className="font-display text-2xl font-semibold text-ink">Vendedores — {intervalo.rotulo}</h1>
           <p className="text-sm text-muted mt-1">Ranking por atendente, de todas as unidades.</p>
         </div>
         <BotaoAtualizar aoAtualizar={carregar} className="shrink-0 print:hidden" />
@@ -234,6 +262,34 @@ function ConteudoVendedores() {
             {a.rotulo}
           </button>
         ))}
+
+        <div className="flex items-center gap-1 ml-1 bg-canvas rounded-full p-0.5 border border-line">
+          <button
+            onClick={() => setTipoPeriodo("semana")}
+            className={`px-3 py-1 rounded-full text-xs transition ${tipoPeriodo === "semana" ? "bg-white shadow-sm font-medium text-ink" : "text-muted"}`}
+          >
+            Semana
+          </button>
+          <button
+            onClick={() => setTipoPeriodo("mes")}
+            className={`px-3 py-1 rounded-full text-xs transition ${tipoPeriodo === "mes" ? "bg-white shadow-sm font-medium text-ink" : "text-muted"}`}
+          >
+            Mês
+          </button>
+        </div>
+        {tipoPeriodo === "semana" ? (
+          <select className="field-input py-1.5 text-sm w-48" value={semanaSelecionada} onChange={(e) => setSemanaSelecionada(e.target.value)}>
+            {semanas.map((s) => (
+              <option key={s.valor} value={s.valor}>{s.rotulo}</option>
+            ))}
+          </select>
+        ) : (
+          <select className="field-input py-1.5 text-sm w-32" value={mesSelecionado} onChange={(e) => setMesSelecionado(e.target.value)}>
+            {meses.map((m) => (
+              <option key={m.valor} value={m.valor}>{m.rotulo}</option>
+            ))}
+          </select>
+        )}
 
         <div className="flex items-center gap-1.5 ml-1">
           <Store size={13} className="text-muted" />
