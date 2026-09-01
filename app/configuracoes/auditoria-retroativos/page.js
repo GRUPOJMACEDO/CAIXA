@@ -1,9 +1,10 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { ShieldAlert, Building2, Briefcase, User, Hash, Percent, Clock, Trophy, Eraser, ArrowDownAZ, ArrowUpAZ, BarChart3, ChevronDown } from "lucide-react";
+import { ShieldAlert, Building2, Briefcase, User, Hash, Percent, Clock, Trophy, Eraser, ArrowDownAZ, ArrowUpAZ, BarChart3, ChevronDown, FileSpreadsheet } from "lucide-react";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from "recharts";
 import AppShell from "../../../components/AppShell";
 import BotaoAtualizar from "../../../components/BotaoAtualizar";
+import BotaoAcao3D from "../../../components/BotaoAcao3D";
 import { supabase } from "../../../lib/supabaseClient";
 import { useSessao } from "../../../lib/SessaoContext";
 import { CARGOS, CARGO_LABELS, podeVerAuditoriaRetroativos } from "../../../lib/permissions";
@@ -120,6 +121,7 @@ function Conteudo() {
   const [cargosSelecionados, setCargosSelecionados] = useState([]);
   const [usuariosSelecionados, setUsuariosSelecionados] = useState([]);
   const [linhas, setLinhas] = useState([]);
+  const [totalGeral, setTotalGeral] = useState(0);
   const [carregando, setCarregando] = useState(true);
   const [ordenacao, setOrdenacao] = useState({ campo: null, direcao: "desc" });
 
@@ -139,13 +141,19 @@ function Conteudo() {
   async function carregar() {
     if (!permitido) return;
     setCarregando(true);
-    const { data, error } = await supabase.rpc("auditoria_lancamentos_retroativos", {
+    const filtros = {
       unidade_ids: unidadesSelecionadas.length > 0 ? unidadesSelecionadas : null,
       cargos: cargosSelecionados.length > 0 ? cargosSelecionados : null,
       usuario_ids: usuariosSelecionados.length > 0 ? usuariosSelecionados : null,
-    });
+    };
+    const [{ data, error }, { data: totalData, error: erroTotal }] = await Promise.all([
+      supabase.rpc("auditoria_lancamentos_retroativos", filtros),
+      supabase.rpc("auditoria_total_lancamentos", filtros),
+    ]);
     if (error) console.error("Erro na auditoria de retroativos:", error.message);
+    if (erroTotal) console.error("Erro no total geral:", erroTotal.message);
     setLinhas(data || []);
+    setTotalGeral(totalData?.[0]?.total || 0);
     setCarregando(false);
   }
 
@@ -198,6 +206,30 @@ function Conteudo() {
   const totalQtd = linhas.length;
   const totalValor = linhas.reduce((s, l) => s + Number(l.valor_pago), 0);
   const mediaAtraso = totalQtd > 0 ? linhas.reduce((s, l) => s + Number(l.dias_atraso), 0) / totalQtd : 0;
+  const percentualRetroativo = totalGeral > 0 ? (totalQtd / totalGeral) * 100 : 0;
+  const percentualNoPrazo = totalGeral > 0 ? 100 - percentualRetroativo : 0;
+
+  async function exportarExcel() {
+    const XLSX = await import("xlsx");
+    const linhasExport = linhasOrdenadas.map((l) => ({
+      "Nº OS": l.numero_os,
+      Unidade: l.unidade_nome,
+      Linha: l.linha === "ih" ? "IH" : "CI",
+      Categoria: l.categoria_nome || "",
+      Responsável: l.responsavel_nome,
+      Login: l.responsavel_login,
+      Cargo: CARGO_LABELS[l.responsavel_cargo] || l.responsavel_cargo,
+      "Editou depois": l.alterado_em ? "Sim" : "Não",
+      "Data selecionada": formatarDataBR(l.data),
+      "Feito em": formatarDataHora(l.alterado_em || l.criado_em),
+      "Dias de atraso": l.dias_atraso,
+      "Valor pago": Number(l.valor_pago),
+    }));
+    const planilha = XLSX.utils.json_to_sheet(linhasExport);
+    const livro = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(livro, planilha, "Lançamentos retroativos");
+    XLSX.writeFile(livro, `lancamentos-retroativos-${hojeBrasil()}.xlsx`);
+  }
 
   const porLogin = new Map();
   linhas.forEach((l) => {
@@ -265,6 +297,7 @@ function Conteudo() {
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <BotaoAtualizar aoAtualizar={carregar} />
+          <BotaoAcao3D icone={FileSpreadsheet} rotulo="Exportar Excel" onClick={exportarExcel} cor="teal" disabled={linhas.length === 0} />
           <button
             onClick={limparFiltros}
             title="Limpar todos os filtros"
@@ -310,7 +343,7 @@ function Conteudo() {
       </div>
 
       {/* Resumo */}
-      <div className="grid grid-cols-3 gap-3 mb-6">
+      <div className="grid grid-cols-4 gap-3 mb-6">
         <div className="card overflow-hidden">
           <div className="h-1.5 bg-[#B23B2E]" />
           <div className="p-4">
@@ -333,6 +366,29 @@ function Conteudo() {
             <div className="w-8 h-8 rounded-lg bg-[#7C56B5]/10 flex items-center justify-center text-[#7C56B5] mb-2"><Clock size={16} /></div>
             <p className="text-xs text-muted mb-1">Média de dias de atraso</p>
             <p className="font-mono-num text-xl font-semibold text-ink">{carregando ? "…" : mediaAtraso.toFixed(1)}</p>
+          </div>
+        </div>
+        <div className="card overflow-hidden">
+          <div className="h-1.5 bg-gradient-to-r from-[#2670B5] to-[#B8621E]" />
+          <div className="p-4">
+            <p className="text-xs text-muted mb-1.5">Em dia × Retroativo</p>
+            {carregando ? (
+              <p className="font-mono-num text-xl font-semibold text-ink">…</p>
+            ) : totalGeral === 0 ? (
+              <p className="text-sm text-muted">Sem lançamentos no período.</p>
+            ) : (
+              <>
+                <div className="flex items-center justify-between text-sm font-mono-num font-semibold mb-1.5">
+                  <span className="text-[#2670B5]">{percentualNoPrazo.toFixed(1)}%</span>
+                  <span className="text-[#B8621E]">{percentualRetroativo.toFixed(1)}%</span>
+                </div>
+                <div className="h-2 rounded-full overflow-hidden bg-canvas flex">
+                  <div className="h-full bg-[#2670B5]" style={{ width: `${percentualNoPrazo}%` }} />
+                  <div className="h-full bg-[#B8621E]" style={{ width: `${percentualRetroativo}%` }} />
+                </div>
+                <p className="text-[10px] text-muted mt-1.5">{totalQtd} de {totalGeral} lançamentos no total</p>
+              </>
+            )}
           </div>
         </div>
       </div>
