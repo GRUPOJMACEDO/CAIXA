@@ -1,18 +1,48 @@
 "use client";
 import { useEffect, useState } from "react";
-import { ShieldAlert, Building2, Briefcase, User, Hash, Percent, Clock, Trophy } from "lucide-react";
+import { ShieldAlert, Building2, Briefcase, User, Hash, Percent, Clock, Trophy, Eraser, ArrowDownAZ, ArrowUpAZ, BarChart3 } from "lucide-react";
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from "recharts";
 import AppShell from "../../../components/AppShell";
 import BotaoAtualizar from "../../../components/BotaoAtualizar";
 import { supabase } from "../../../lib/supabaseClient";
 import { useSessao } from "../../../lib/SessaoContext";
 import { CARGOS, CARGO_LABELS, podeVerAuditoriaRetroativos } from "../../../lib/permissions";
 import { formatarMoedaSemSimbolo, formatarDataBR } from "../../../lib/formato";
+import { hojeBrasil } from "../../../lib/fusoHorario";
 
 function formatarDataHora(iso) {
   if (!iso) return "—";
   const d = new Date(iso);
   return `${d.toLocaleDateString("pt-BR")} às ${d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`;
 }
+
+function somarDias(dataIso, qtd) {
+  const d = new Date(dataIso + "T12:00:00");
+  d.setDate(d.getDate() + qtd);
+  return d.toISOString().slice(0, 10);
+}
+function diaSeguinte(dataIso) {
+  return somarDias(dataIso, 1);
+}
+function inicioDaSemanaDe(dataIso) {
+  const d = new Date(dataIso + "T12:00:00");
+  d.setDate(d.getDate() - d.getDay());
+  return d.toISOString().slice(0, 10);
+}
+function formatarDataCurta(dataIso) {
+  const [, mes, dia] = dataIso.split("-");
+  return `${dia}/${mes}`;
+}
+function formatarMesCurto(chaveMes) {
+  const [ano, mes] = chaveMes.split("-");
+  return `${mes}/${ano}`;
+}
+
+const GRANULARIDADES = [
+  { id: "dia", rotulo: "Dia" },
+  { id: "semana", rotulo: "Semana" },
+  { id: "mes", rotulo: "Mês" },
+];
 
 function Conteudo() {
   const { usuario, unidades } = useSessao();
@@ -24,6 +54,11 @@ function Conteudo() {
   const [usuariosSelecionados, setUsuariosSelecionados] = useState([]);
   const [linhas, setLinhas] = useState([]);
   const [carregando, setCarregando] = useState(true);
+  const [ordenacao, setOrdenacao] = useState({ campo: null, direcao: "desc" });
+
+  const [granularidadeGrafico, setGranularidadeGrafico] = useState("dia");
+  const [comparativo, setComparativo] = useState([]);
+  const [carregandoGrafico, setCarregandoGrafico] = useState(false);
 
   useEffect(() => {
     if (!permitido) return;
@@ -50,6 +85,43 @@ function Conteudo() {
   useEffect(() => {
     carregar();
   }, [unidadesSelecionadas, cargosSelecionados, usuariosSelecionados]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function limparFiltros() {
+    setUnidadesSelecionadas([]);
+    setCargosSelecionados([]);
+    setUsuariosSelecionados([]);
+  }
+
+  function alternarOrdenacao(campo) {
+    setOrdenacao((atual) => (atual.campo === campo ? { campo, direcao: atual.direcao === "desc" ? "asc" : "desc" } : { campo, direcao: "desc" }));
+  }
+
+  // --- gráfico comparativo (em dia × retroativo), só quando 1 unidade está selecionada ---
+  const unidadeUnicaId = unidadesSelecionadas.length === 1 ? unidadesSelecionadas[0] : null;
+  const unidadeUnicaNome = unidadeUnicaId ? unidades.find((u) => u.id === unidadeUnicaId)?.nome : null;
+
+  async function carregarComparativo() {
+    if (!unidadeUnicaId) {
+      setComparativo([]);
+      return;
+    }
+    setCarregandoGrafico(true);
+    const hoje = hojeBrasil();
+    const dataInicio =
+      granularidadeGrafico === "mes" ? somarDias(hoje, -365) : granularidadeGrafico === "semana" ? somarDias(hoje, -7 * 11) : somarDias(hoje, -29);
+    const { data, error } = await supabase.rpc("auditoria_comparativo_unidade", {
+      unidade_id_param: unidadeUnicaId,
+      data_inicio: dataInicio,
+      data_fim_excl: diaSeguinte(hoje),
+    });
+    if (error) console.error("Erro no comparativo:", error.message);
+    setComparativo(data || []);
+    setCarregandoGrafico(false);
+  }
+
+  useEffect(() => {
+    carregarComparativo();
+  }, [unidadeUnicaId, granularidadeGrafico]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!permitido) {
     return <p className="text-sm text-muted">Você não tem acesso a essa tela.</p>;
@@ -81,6 +153,38 @@ function Conteudo() {
   });
   const rankingUnidade = [...porUnidade.values()].sort((a, b) => b.qtd - a.qtd).slice(0, 8);
 
+  // --- ordenação da tabela de detalhe ---
+  const linhasOrdenadas = [...linhas];
+  if (ordenacao.campo === "data") {
+    linhasOrdenadas.sort((a, b) => (a.data < b.data ? -1 : a.data > b.data ? 1 : 0) * (ordenacao.direcao === "desc" ? -1 : 1));
+  } else if (ordenacao.campo === "feito_em") {
+    linhasOrdenadas.sort((a, b) => {
+      const da = a.alterado_em || a.criado_em;
+      const db = b.alterado_em || b.criado_em;
+      return (da < db ? -1 : da > db ? 1 : 0) * (ordenacao.direcao === "desc" ? -1 : 1);
+    });
+  }
+
+  function IconeOrdenacao({ campo }) {
+    if (ordenacao.campo !== campo) return null;
+    return ordenacao.direcao === "desc" ? <ArrowDownAZ size={11} className="inline ml-1" /> : <ArrowUpAZ size={11} className="inline ml-1" />;
+  }
+
+  // --- pivô do gráfico comparativo, agrupado pela granularidade escolhida ---
+  const chaveBucket = (dia) => (granularidadeGrafico === "mes" ? dia.slice(0, 7) : granularidadeGrafico === "semana" ? inicioDaSemanaDe(dia) : dia);
+  const rotuloBucket = (chave) => (granularidadeGrafico === "mes" ? formatarMesCurto(chave) : formatarDataCurta(chave));
+  const buckets = new Map();
+  comparativo.forEach((c) => {
+    const chave = chaveBucket(c.dia);
+    if (!buckets.has(chave)) buckets.set(chave, { noPrazo: 0, retroativo: 0 });
+    const acc = buckets.get(chave);
+    acc.noPrazo += Number(c.valor_no_prazo);
+    acc.retroativo += Number(c.valor_retroativo);
+  });
+  const dadosGraficoComparativo = [...buckets.entries()]
+    .sort(([a], [b]) => (a < b ? -1 : 1))
+    .map(([chave, v]) => ({ rotulo: rotuloBucket(chave), "Em dia": v.noPrazo, "Retroativo": v.retroativo }));
+
   return (
     <div className="w-full">
       <div className="mb-6 flex items-start justify-between gap-4">
@@ -91,17 +195,32 @@ function Conteudo() {
           </h1>
           <p className="text-sm text-muted mt-1">Lançamentos com data anterior ao dia em que a ação foi realmente feita (na criação ou numa edição posterior).</p>
         </div>
-        <BotaoAtualizar aoAtualizar={carregar} />
+        <div className="flex items-center gap-2 shrink-0">
+          <BotaoAtualizar aoAtualizar={carregar} />
+          <button
+            onClick={limparFiltros}
+            title="Limpar todos os filtros"
+            className="group inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium text-white
+              bg-gradient-to-b from-gold to-gold-strong
+              shadow-[0_3px_0_0_rgba(0,0,0,0.18),0_8px_16px_-4px_rgba(184,134,46,0.55)]
+              hover:brightness-105 hover:-translate-y-0.5
+              active:translate-y-0 active:shadow-[0_1px_0_0_rgba(0,0,0,0.18),0_4px_8px_-2px_rgba(184,134,46,0.5)]
+              transition-all duration-150"
+          >
+            <Eraser size={15} />
+            Todos
+          </button>
+        </div>
       </div>
 
-      {/* Filtros */}
+      {/* Filtros — numa linha só */}
       <div className="card p-4 mb-5">
-        <div className="flex items-start gap-4 flex-wrap">
-          <div className="min-w-[240px] flex-1">
+        <div className="flex items-start gap-3 flex-nowrap overflow-x-auto">
+          <div className="min-w-[220px] flex-1">
             <p className="text-[11px] font-semibold text-muted uppercase tracking-wide mb-1.5 flex items-center gap-1"><Building2 size={11} /> Unidades</p>
             <select
               multiple
-              size={5}
+              size={3}
               className="field-input text-sm w-full"
               value={unidadesSelecionadas}
               onChange={(e) => setUnidadesSelecionadas([...e.target.selectedOptions].map((o) => o.value))}
@@ -110,14 +229,13 @@ function Conteudo() {
                 <option key={u.id} value={u.id}>{u.nome}</option>
               ))}
             </select>
-            <p className="text-[10px] text-muted mt-1">Nenhuma marcada = todas.</p>
           </div>
 
-          <div className="min-w-[180px]">
+          <div className="min-w-[160px]">
             <p className="text-[11px] font-semibold text-muted uppercase tracking-wide mb-1.5 flex items-center gap-1"><Briefcase size={11} /> Cargo</p>
             <select
               multiple
-              size={5}
+              size={3}
               className="field-input text-sm w-full"
               value={cargosSelecionados}
               onChange={(e) => setCargosSelecionados([...e.target.selectedOptions].map((o) => o.value))}
@@ -128,11 +246,11 @@ function Conteudo() {
             </select>
           </div>
 
-          <div className="min-w-[240px] flex-1">
+          <div className="min-w-[220px] flex-1">
             <p className="text-[11px] font-semibold text-muted uppercase tracking-wide mb-1.5 flex items-center gap-1"><User size={11} /> Usuário</p>
             <select
               multiple
-              size={5}
+              size={3}
               className="field-input text-sm w-full"
               value={usuariosSelecionados}
               onChange={(e) => setUsuariosSelecionados([...e.target.selectedOptions].map((o) => o.value))}
@@ -143,6 +261,7 @@ function Conteudo() {
             </select>
           </div>
         </div>
+        <p className="text-[10px] text-muted mt-1.5">Nenhuma opção marcada num filtro = considera todas. Shift ou Ctrl + clique pra marcar várias.</p>
       </div>
 
       {/* Resumo */}
@@ -172,6 +291,46 @@ function Conteudo() {
           </div>
         </div>
       </div>
+
+      {/* Gráfico comparativo — só aparece com 1 unidade selecionada */}
+      {unidadeUnicaId && (
+        <div className="card p-5 mb-6">
+          <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
+            <p className="text-sm font-semibold text-ink flex items-center gap-1.5">
+              <BarChart3 size={14} className="text-[#2E6B7A]" /> {unidadeUnicaNome} — valor em dia × retroativo
+            </p>
+            <div className="flex items-center gap-1 bg-canvas rounded-full p-0.5 border border-line">
+              {GRANULARIDADES.map((g) => (
+                <button
+                  key={g.id}
+                  onClick={() => setGranularidadeGrafico(g.id)}
+                  className={`px-3 py-1 rounded-full text-xs transition ${granularidadeGrafico === g.id ? "bg-white shadow-sm font-medium text-ink" : "text-muted"}`}
+                >
+                  {g.rotulo}
+                </button>
+              ))}
+            </div>
+          </div>
+          <p className="text-xs text-muted mb-4">Verde = valor lançado na data certa. Vermelho = valor lançado com data retroativa.</p>
+          {carregandoGrafico ? (
+            <p className="text-sm text-muted py-12 text-center">Carregando…</p>
+          ) : dadosGraficoComparativo.length === 0 ? (
+            <p className="text-sm text-muted py-12 text-center">Sem lançamentos nesse período.</p>
+          ) : (
+            <ResponsiveContainer width="100%" height={Math.max(220, dadosGraficoComparativo.length * 26)}>
+              <BarChart data={dadosGraficoComparativo} layout="vertical" margin={{ top: 5, right: 20, left: 10, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#E4E7EC" horizontal={false} />
+                <XAxis type="number" tick={{ fontSize: 10, fill: "#6B6D76" }} tickFormatter={(v) => `R$ ${Number(v).toLocaleString("pt-BR", { maximumFractionDigits: 0 })}`} />
+                <YAxis type="category" dataKey="rotulo" tick={{ fontSize: 11, fill: "#6B6D76" }} width={70} />
+                <Tooltip formatter={(v, nome) => [`R$ ${formatarMoedaSemSimbolo(v)}`, nome]} />
+                <Legend wrapperStyle={{ fontSize: 12 }} />
+                <Bar dataKey="Em dia" fill="#3F8A5C" radius={[0, 4, 4, 0]} maxBarSize={16} />
+                <Bar dataKey="Retroativo" fill="#B23B2E" radius={[0, 4, 4, 0]} maxBarSize={16} />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+      )}
 
       {!carregando && linhas.length > 0 && (
         <div className="grid grid-cols-2 gap-5 mb-6">
@@ -212,16 +371,20 @@ function Conteudo() {
               <td className="p-3">Unidade</td>
               <td className="p-3">Categoria</td>
               <td className="p-3">Responsável</td>
-              <td className="p-3">Data selecionada</td>
-              <td className="p-3">Feito em</td>
+              <td className="p-3 cursor-pointer select-none hover:text-ink" onClick={() => alternarOrdenacao("data")}>
+                Data selecionada<IconeOrdenacao campo="data" />
+              </td>
+              <td className="p-3 cursor-pointer select-none hover:text-ink" onClick={() => alternarOrdenacao("feito_em")}>
+                Feito em<IconeOrdenacao campo="feito_em" />
+              </td>
               <td className="p-3 text-right">Dias de atraso</td>
               <td className="p-3 text-right">Valor</td>
             </tr>
           </thead>
           <tbody>
             {carregando && <tr><td className="p-4 text-muted" colSpan={8}>Carregando…</td></tr>}
-            {!carregando && linhas.length === 0 && <tr><td className="p-4 text-muted" colSpan={8}>Nenhum lançamento retroativo encontrado para esses filtros.</td></tr>}
-            {linhas.map((l) => (
+            {!carregando && linhasOrdenadas.length === 0 && <tr><td className="p-4 text-muted" colSpan={8}>Nenhum lançamento retroativo encontrado para esses filtros.</td></tr>}
+            {linhasOrdenadas.map((l) => (
               <tr key={l.id} className="border-t border-line">
                 <td className="p-3 font-mono-num">{l.numero_os}</td>
                 <td className="p-3">
