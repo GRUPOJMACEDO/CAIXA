@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Search, X, FileDown, Pencil, SearchX, Trash2, AlertTriangle, Ticket, Plus, StickyNote } from "lucide-react";
 import AppShell from "../../components/AppShell";
 import Modal from "../../components/Modal";
@@ -22,6 +23,7 @@ function gerarIdLinhaConsulta() {
 
 function Conteudo() {
   const { usuario, unidades, linhaFiltro } = useSessao();
+  const parametrosUrl = useSearchParams();
   const [categorias, setCategorias] = useState([]);
   const [numeroOs, setNumeroOs] = useState("");
   const [dataDe, setDataDe] = useState("");
@@ -59,11 +61,20 @@ function Conteudo() {
   const podeExcluir = podeExcluirLancamento(usuario.cargo);
 
   useEffect(() => {
+    const osDaUrl = parametrosUrl.get("os");
+    if (osDaUrl) {
+      setNumeroOs(osDaUrl);
+      buscar({ preventDefault: () => {} }, osDaUrl);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
     supabase.from("categorias").select("*").order("nome").then(({ data }) => setCategorias(data || []));
   }, []);
 
-  async function buscar(e) {
+  async function buscar(e, numeroOsParam) {
     e.preventDefault();
+    const numeroOsEfetivo = numeroOsParam ?? numeroOs;
     setBuscando(true);
     let query = supabase
       .from("lancamentos")
@@ -74,7 +85,7 @@ function Conteudo() {
       .order("data", { ascending: false });
 
     if (linhaFiltro) query = query.eq("linha", linhaFiltro);
-    if (numeroOs.trim()) query = query.ilike("numero_os", `%${numeroOs.trim().toUpperCase()}%`);
+    if (numeroOsEfetivo.trim()) query = query.ilike("numero_os", `%${numeroOsEfetivo.trim().toUpperCase()}%`);
     if (modoPeriodo === "semana") {
       const semana = semanas.find((s) => s.valor === semanaSelecionada) || semanas[0];
       query = query.gte("data", semana.inicio).lte("data", semana.fim);

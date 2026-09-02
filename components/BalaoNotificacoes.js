@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { PartyPopper, Sparkles, Megaphone, Check } from "lucide-react";
+import { PartyPopper, Sparkles, Megaphone, Check, Copy } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { useSessao } from "../lib/SessaoContext";
 
@@ -70,12 +70,31 @@ export default function BalaoNotificacoes() {
     tocarBip();
   }
 
+  function aoNovaDuplicidade(payload) {
+    const n = payload.new;
+    const id = proximoIdBalao++;
+    setBaloes((atual) => [...atual, { id, tipo: "duplicidade", notificacaoId: n.id, numeroOs: n.numero_os }]);
+    tocarBip();
+  }
+
+  async function marcarDuplicidadeLida(balao) {
+    removerBalao(balao.id);
+    if (balao.notificacaoId) {
+      await supabase.from("notificacoes_duplicidade").update({ lida: true }).eq("id", balao.notificacaoId);
+    }
+  }
+
   useEffect(() => {
     if (!usuario) return;
     const canal = supabase
       .channel("celebracoes")
       .on("broadcast", { event: "novo_lancamento" }, aoNovoLancamento)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "avisos_admin" }, aoNovoAviso)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "notificacoes_duplicidade", filter: `usuario_id=eq.${usuario.id}` },
+        aoNovaDuplicidade
+      )
       .subscribe();
     return () => {
       supabase.removeChannel(canal);
@@ -107,7 +126,7 @@ export default function BalaoNotificacoes() {
                 <p className="font-mono-num text-base font-bold mt-0.5">R$ {formatarMoeda(b.valor)}</p>
               </div>
             </div>
-          ) : (
+          ) : b.tipo === "aviso" ? (
             <div className="flex items-start gap-3 rounded-2xl px-4 py-3 shadow-2xl border border-line bg-white w-80">
               <div className="w-9 h-9 rounded-full bg-gold-soft flex items-center justify-center shrink-0 text-gold-strong">
                 <Megaphone size={16} />
@@ -119,6 +138,32 @@ export default function BalaoNotificacoes() {
               <button
                 onClick={() => removerBalao(b.id)}
                 title="Marcar como lido e fechar"
+                className="shrink-0 w-7 h-7 rounded-full bg-teal-soft text-teal flex items-center justify-center hover:bg-teal hover:text-white transition"
+              >
+                <Check size={14} />
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-start gap-3 rounded-2xl px-4 py-3 shadow-2xl border border-line bg-white w-80">
+              <div className="w-9 h-9 rounded-full bg-danger-soft flex items-center justify-center shrink-0 text-danger">
+                <Copy size={16} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-[11px] uppercase tracking-wide text-muted font-semibold mb-0.5">Duplicidade detectada</p>
+                <p className="text-sm text-ink break-words">
+                  A OS <span className="font-mono-num font-medium">{b.numeroOs}</span> foi lançada mais de uma vez.
+                </p>
+                <a
+                  href="/configuracoes/duplicidades"
+                  onClick={() => marcarDuplicidadeLida(b)}
+                  className="text-xs text-gold-strong hover:underline mt-1 inline-block"
+                >
+                  Ver na tela de Duplicidades →
+                </a>
+              </div>
+              <button
+                onClick={() => marcarDuplicidadeLida(b)}
+                title="Marcar como lida e fechar"
                 className="shrink-0 w-7 h-7 rounded-full bg-teal-soft text-teal flex items-center justify-center hover:bg-teal hover:text-white transition"
               >
                 <Check size={14} />

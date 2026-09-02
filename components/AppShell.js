@@ -31,6 +31,7 @@ import {
   Briefcase,
   BarChart3,
   ShieldAlert,
+  Copy,
 } from "lucide-react";
 import BotaoModoClaroEscuro from "./BotaoModoClaroEscuro";
 import SinoSolicitacoesSenha from "./SinoSolicitacoesSenha";
@@ -41,6 +42,7 @@ import BotaoUsuariosOnline from "./BotaoUsuariosOnline";
 import BotaoAvisoAdmin from "./BotaoAvisoAdmin";
 import BalaoNotificacoes from "./BalaoNotificacoes";
 import { SessaoProvider, useSessao } from "../lib/SessaoContext";
+import { supabase } from "../lib/supabaseClient";
 import {
   rotuloCargo,
   podeConfigTiposServico,
@@ -54,6 +56,8 @@ import {
   podeVerManutencao,
   podeVerEstatisticas,
   podeVerAuditoriaRetroativos,
+  podeVerDuplicidades,
+  podeVerTodasUnidades,
 } from "../lib/permissions";
 
 export const NAV_OPERACAO = [
@@ -87,6 +91,7 @@ export function navConfiguracoes(cargo) {
   if (podeVerManutencao(cargo)) itens.push({ href: "/configuracoes/manutencao", label: "Manutenção do banco", icon: DatabaseZap, descricao: "Apagar dados de teste antes de usar o sistema de verdade." });
   if (podeVerEstatisticas(cargo)) itens.push({ href: "/configuracoes/estatisticas", label: "Estatísticas", icon: BarChart3, descricao: "Métricas e tendências de uso do sistema." });
   if (podeVerAuditoriaRetroativos(cargo)) itens.push({ href: "/configuracoes/auditoria-retroativos", label: "Lançamentos retroativos", icon: ShieldAlert, descricao: "Quem está lançando com data anterior ao dia atual." });
+  if (podeVerDuplicidades(cargo)) itens.push({ href: "/configuracoes/duplicidades", label: "Duplicidades", icon: Copy, descricao: "OS repetidas dentro da mesma unidade." });
   return itens;
 }
 
@@ -115,6 +120,7 @@ const CORES_ITEM = {
   "/configuracoes/manutencao": "#B23B2E",
   "/configuracoes/estatisticas": "#2E6B7A",
   "/configuracoes/auditoria-retroativos": "#B23B2E",
+  "/configuracoes/duplicidades": "#C9752E",
 };
 
 const CORES_SECAO = {
@@ -141,7 +147,7 @@ function IconeSelo({ icone: Icone, cor, tamanho = 14, caixa = 22 }) {
   );
 }
 
-function ItemNav({ item, ativo, recolhido }) {
+function ItemNav({ item, ativo, recolhido, contador }) {
   const Icone = item.icon;
   const cor = CORES_ITEM[item.href] || "#7C819C";
   return (
@@ -152,18 +158,25 @@ function ItemNav({ item, ativo, recolhido }) {
         ${ativo ? "bg-gold/15 text-gold font-medium" : "text-muted hover:bg-ink/5 hover:text-ink"}
         ${recolhido ? "justify-center" : ""}`}
     >
-      <IconeSelo icone={Icone} cor={cor} />
-      {!recolhido && item.label}
+      <span className="relative shrink-0">
+        <IconeSelo icone={Icone} cor={cor} />
+        {contador > 0 && (
+          <span className="absolute -top-1.5 -right-1.5 min-w-[15px] h-[15px] px-1 rounded-full bg-danger text-white text-[9px] font-bold flex items-center justify-center">
+            {contador > 9 ? "9+" : contador}
+          </span>
+        )}
+      </span>
+      {!recolhido && <span className="flex-1">{item.label}</span>}
     </Link>
   );
 }
 
-function SecaoNav({ titulo, hrefHub, icone: Icone, corSecao, itens, pathname, recolhido, aberta, onToggle, aoClicarNome }) {
+function SecaoNav({ titulo, hrefHub, icone: Icone, corSecao, itens, pathname, recolhido, aberta, onToggle, aoClicarNome, contadores }) {
   if (recolhido) {
     return (
       <div className="space-y-0.5">
         {itens.map((item) => (
-          <ItemNav key={item.href} item={item} ativo={pathname === item.href} recolhido={recolhido} />
+          <ItemNav key={item.href} item={item} ativo={pathname === item.href} recolhido={recolhido} contador={contadores?.[item.href]} />
         ))}
       </div>
     );
@@ -186,7 +199,7 @@ function SecaoNav({ titulo, hrefHub, icone: Icone, corSecao, itens, pathname, re
       {aberta && (
         <div className="space-y-0.5">
           {itens.map((item) => (
-            <ItemNav key={item.href} item={item} ativo={pathname === item.href} recolhido={recolhido} />
+            <ItemNav key={item.href} item={item} ativo={pathname === item.href} recolhido={recolhido} contador={contadores?.[item.href]} />
           ))}
         </div>
       )}
@@ -219,6 +232,26 @@ function Shell({ children }) {
     }
     setSecaoAberta(secaoDaRota(pathname));
   }, [pathname]);
+
+  const [contadorDuplicidades, setContadorDuplicidades] = useState(0);
+
+  useEffect(() => {
+    if (!usuario || !podeVerDuplicidades(usuario.cargo)) return;
+    async function verificar() {
+      const unidadeIdsParam = podeVerTodasUnidades(usuario.cargo) ? null : unidades.map((u) => u.id);
+      const { data } = await supabase.rpc("duplicidades_os", { unidade_ids: unidadeIdsParam });
+      if (!data) return;
+      const { data: revisadas } = await supabase.from("duplicidades_revisadas").select("unidade_id, numero_os");
+      const revisadasSet = new Set((revisadas || []).map((r) => `${r.unidade_id}::${r.numero_os}`));
+      const gruposPendentes = new Set(
+        data.filter((d) => !revisadasSet.has(`${d.unidade_id}::${d.numero_os}`)).map((d) => `${d.unidade_id}::${d.numero_os}`)
+      );
+      setContadorDuplicidades(gruposPendentes.size);
+    }
+    verificar();
+    const intervalo = setInterval(verificar, 45000);
+    return () => clearInterval(intervalo);
+  }, [usuario?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!usuario) {
     return (
@@ -287,6 +320,7 @@ function Shell({ children }) {
               aberta={secaoAberta === "configuracoes"}
               onToggle={() => setSecaoAberta((s) => (s === "configuracoes" ? null : "configuracoes"))}
               aoClicarNome={() => setSecaoAberta("configuracoes")}
+              contadores={{ "/configuracoes/duplicidades": contadorDuplicidades }}
             />
           )}
 
