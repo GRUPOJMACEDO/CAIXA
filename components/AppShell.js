@@ -69,6 +69,14 @@ export const NAV_OPERACAO = [
   { href: "/relatorios/pareto", label: "Pareto", icon: BarChart3, descricao: "Compare o volume e os valores por dia da semana." },
 ];
 
+// itens de Operação que só aparecem pra determinados cargos (ao contrário
+// dos de cima, que são fixos pra todo mundo)
+export function navOperacaoExtra(cargo) {
+  const itens = [];
+  if (podeVerDuplicidades(cargo)) itens.push({ href: "/configuracoes/duplicidades", label: "Duplicidades", icon: Copy, descricao: "OS repetidas dentro da mesma unidade." });
+  return itens;
+}
+
 export const NAV_DASHBOARD = [
   { href: "/dashboard/valores-diario", label: "Valores (Diário)", icon: LayoutDashboard, descricao: "Resultado de hoje, por unidade, com ranking." },
   { href: "/dashboard/valores-semanal", label: "Valores (Semanal)", icon: LayoutDashboard, descricao: "Resultado da semana (domingo a sábado), por unidade." },
@@ -91,7 +99,6 @@ export function navConfiguracoes(cargo) {
   if (podeVerManutencao(cargo)) itens.push({ href: "/configuracoes/manutencao", label: "Manutenção do banco", icon: DatabaseZap, descricao: "Apagar dados de teste antes de usar o sistema de verdade." });
   if (podeVerEstatisticas(cargo)) itens.push({ href: "/configuracoes/estatisticas", label: "Estatísticas", icon: BarChart3, descricao: "Métricas e tendências de uso do sistema." });
   if (podeVerAuditoriaRetroativos(cargo)) itens.push({ href: "/configuracoes/auditoria-retroativos", label: "Lançamentos retroativos", icon: ShieldAlert, descricao: "Quem está lançando com data anterior ao dia atual." });
-  if (podeVerDuplicidades(cargo)) itens.push({ href: "/configuracoes/duplicidades", label: "Duplicidades", icon: Copy, descricao: "OS repetidas dentro da mesma unidade." });
   return itens;
 }
 
@@ -208,7 +215,7 @@ function SecaoNav({ titulo, hrefHub, icone: Icone, corSecao, itens, pathname, re
 }
 
 function secaoDaRota(pathname) {
-  if (NAV_OPERACAO.some((i) => i.href === pathname) || pathname === "/operacao") return "operacao";
+  if (NAV_OPERACAO.some((i) => i.href === pathname) || pathname === "/operacao" || pathname === "/configuracoes/duplicidades") return "operacao";
   if (NAV_DASHBOARD.some((i) => i.href === pathname)) return "dashboard";
   if (pathname.startsWith("/configuracoes")) return "configuracoes";
   return null;
@@ -263,7 +270,8 @@ function Shell({ children }) {
 
   const largura = recolhido ? "w-[72px]" : "w-64";
   const itensConfig = navConfiguracoes(usuario.cargo);
-  const todosItens = [...NAV_OPERACAO, ...NAV_DASHBOARD, ...itensConfig];
+  const itensOperacao = [...NAV_OPERACAO, ...navOperacaoExtra(usuario.cargo)];
+  const todosItens = [...itensOperacao, ...NAV_DASHBOARD, ...itensConfig];
   const tituloAtual =
     todosItens.find((i) => i.href === pathname)?.label ||
     (pathname === "/operacao" ? "Operação" : pathname === "/configuracoes" ? "Configurações" : "");
@@ -287,12 +295,13 @@ function Shell({ children }) {
             hrefHub="/operacao"
             icone={Briefcase}
             corSecao={CORES_SECAO.operacao}
-            itens={NAV_OPERACAO}
+            itens={itensOperacao}
             pathname={pathname}
             recolhido={recolhido}
             aberta={secaoAberta === "operacao"}
             onToggle={() => setSecaoAberta((s) => (s === "operacao" ? null : "operacao"))}
             aoClicarNome={() => setSecaoAberta("operacao")}
+            contadores={{ "/configuracoes/duplicidades": contadorDuplicidades }}
           />
 
           <SecaoNav
@@ -320,7 +329,6 @@ function Shell({ children }) {
               aberta={secaoAberta === "configuracoes"}
               onToggle={() => setSecaoAberta((s) => (s === "configuracoes" ? null : "configuracoes"))}
               aoClicarNome={() => setSecaoAberta("configuracoes")}
-              contadores={{ "/configuracoes/duplicidades": contadorDuplicidades }}
             />
           )}
 

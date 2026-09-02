@@ -1,6 +1,6 @@
 "use client";
-import { useEffect, useState } from "react";
-import { Copy, Check, X, Pencil, Trash2, AlertTriangle, Building2 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Copy, Check, X, Pencil, Trash2, AlertTriangle, Building2, ChevronDown } from "lucide-react";
 import AppShell from "../../../components/AppShell";
 import Modal from "../../../components/Modal";
 import BotaoAtualizar from "../../../components/BotaoAtualizar";
@@ -17,6 +17,58 @@ const ESTILO_NIVEL = {
   4: { borda: "border-l-4 border-l-black", selo: "bg-black/85 text-white", rotulo: "OS + Tipo + Valor + Data" },
 };
 
+/** Seletor de múltipla escolha, suspenso — abre numa linha, fecha ao marcar uma opção. */
+function SeletorSuspenso({ rotulo, icone: Icone, opcoes, selecionados, onChange }) {
+  const [aberto, setAberto] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    function aoClicarFora(e) {
+      if (ref.current && !ref.current.contains(e.target)) setAberto(false);
+    }
+    window.addEventListener("mousedown", aoClicarFora);
+    return () => window.removeEventListener("mousedown", aoClicarFora);
+  }, []);
+
+  function alternar(valor) {
+    onChange(selecionados.includes(valor) ? selecionados.filter((v) => v !== valor) : [...selecionados, valor]);
+    setAberto(false);
+  }
+
+  const rotuloBotao =
+    selecionados.length === 0
+      ? "Todas"
+      : selecionados.length === 1
+        ? opcoes.find((o) => o.valor === selecionados[0])?.rotulo || "1 selecionada"
+        : `${selecionados.length} selecionadas`;
+
+  return (
+    <div className="relative w-64" ref={ref}>
+      <p className="text-[11px] font-semibold text-muted uppercase tracking-wide mb-1.5 flex items-center gap-1">
+        {Icone && <Icone size={11} />} {rotulo}
+      </p>
+      <button
+        type="button"
+        onClick={() => setAberto((v) => !v)}
+        className="field-input text-sm w-full flex items-center justify-between text-left"
+      >
+        <span className="truncate">{rotuloBotao}</span>
+        <ChevronDown size={14} className={`shrink-0 transition-transform ${aberto ? "rotate-180" : ""}`} />
+      </button>
+      {aberto && (
+        <div className="absolute z-20 mt-1 w-full max-h-56 overflow-y-auto bg-white border border-line rounded-lg shadow-lg">
+          {opcoes.map((o) => (
+            <label key={o.valor} className="flex items-center gap-2 px-3 py-2 text-sm hover:bg-canvas cursor-pointer">
+              <input type="checkbox" checked={selecionados.includes(o.valor)} onChange={() => alternar(o.valor)} />
+              {o.rotulo}
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Conteudo() {
   const { usuario, unidades } = useSessao();
   const permitido = podeVerDuplicidades(usuario.cargo);
@@ -26,6 +78,7 @@ function Conteudo() {
   const [revisadas, setRevisadas] = useState(new Set());
   const [carregando, setCarregando] = useState(true);
   const [gruposRecusados, setGruposRecusados] = useState(new Set()); // chave unidade::os que teve "Recusar" clicado
+  const [unidadesFiltro, setUnidadesFiltro] = useState([]);
   const [excluindo, setExcluindo] = useState(null); // lançamento em processo de exclusão
   const [motivoExclusao, setMotivoExclusao] = useState("");
   const [processando, setProcessando] = useState(false);
@@ -33,7 +86,8 @@ function Conteudo() {
   async function carregar() {
     if (!permitido) return;
     setCarregando(true);
-    const unidadeIdsParam = podeVerTodasUnidades(usuario.cargo) ? null : unidades.map((u) => u.id);
+    const unidadeIdsParam =
+      unidadesFiltro.length > 0 ? unidadesFiltro : podeVerTodasUnidades(usuario.cargo) ? null : unidades.map((u) => u.id);
     const [{ data, error }, { data: revisadasData }] = await Promise.all([
       supabase.rpc("duplicidades_os", { unidade_ids: unidadeIdsParam }),
       supabase.from("duplicidades_revisadas").select("unidade_id, numero_os"),
@@ -46,7 +100,7 @@ function Conteudo() {
 
   useEffect(() => {
     carregar();
-  }, [permitido]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [permitido, unidadesFiltro]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!permitido) {
     return <p className="text-sm text-muted">Você não tem acesso a essa tela.</p>;
@@ -108,7 +162,7 @@ function Conteudo() {
     <div className="w-full">
       <div className="mb-6 flex items-start justify-between gap-4">
         <div className="min-w-0">
-          <p className="text-xs uppercase tracking-wider text-muted mb-1">Configurações</p>
+          <p className="text-xs uppercase tracking-wider text-muted mb-1">Operação</p>
           <h1 className="font-display text-2xl font-semibold text-ink flex items-center gap-2">
             <Copy size={22} className="text-[#C9752E]" /> Duplicidades
           </h1>
@@ -116,6 +170,18 @@ function Conteudo() {
         </div>
         <BotaoAtualizar aoAtualizar={carregar} />
       </div>
+
+      {unidades.length > 1 && (
+        <div className="card p-4 mb-5 flex items-start">
+          <SeletorSuspenso
+            rotulo="Unidade"
+            icone={Building2}
+            opcoes={unidades.map((u) => ({ valor: u.id, rotulo: u.nome }))}
+            selecionados={unidadesFiltro}
+            onChange={setUnidadesFiltro}
+          />
+        </div>
+      )}
 
       <div className="flex items-center gap-3 mb-5 text-sm">
         <span className="inline-flex items-center gap-1.5 font-mono-num font-semibold text-ink bg-canvas rounded-full px-3 py-1">
