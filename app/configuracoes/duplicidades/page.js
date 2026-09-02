@@ -17,6 +17,11 @@ const ESTILO_NIVEL = {
   4: { borda: "border-l-4 border-l-black", selo: "bg-black/85 text-white", rotulo: "OS + Tipo + Valor + Data" },
 };
 
+function formatarHora(iso) {
+  if (!iso) return "";
+  return new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+}
+
 /** Seletor de múltipla escolha, suspenso — abre numa linha, fecha ao marcar uma opção. */
 function SeletorSuspenso({ rotulo, icone: Icone, opcoes, selecionados, onChange }) {
   const [aberto, setAberto] = useState(false);
@@ -238,7 +243,10 @@ function Conteudo() {
                       <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium shrink-0 ${ESTILO_NIVEL[l.nivel].selo}`}>
                         {ESTILO_NIVEL[l.nivel].rotulo}
                       </span>
-                      <span className="text-xs text-muted w-24 shrink-0">{formatarDataBR(l.data)}</span>
+                      <span className="text-xs text-muted w-32 shrink-0">
+                        {formatarDataBR(l.data)}
+                        {l.criado_em && <span className="text-[10px] text-muted/70"> · {formatarHora(l.criado_em)}</span>}
+                      </span>
                       <span className="flex-1 min-w-0 truncate text-ink">
                         {l.tipo_servico_nome || "—"}
                         {l.linha === "ih" && <span className="ml-1.5 text-[9px] px-1.5 py-0.5 rounded font-medium bg-teal-soft text-teal">IH</span>}
