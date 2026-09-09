@@ -9,11 +9,11 @@ import { useSessao } from "../../../lib/SessaoContext";
 import { podeVerDuplicidades, podeRevisarDuplicidades, podeVerTodasUnidades } from "../../../lib/permissions";
 import { formatarMoedaSemSimbolo, formatarDataBR } from "../../../lib/formato";
 
-// gravidade → estilo visual (quanto mais campos batem, mais escuro)
+// gravidade → uma cor própria pra cada nível (fácil de diferenciar de relance)
 const ESTILO_NIVEL = {
-  1: { borda: "border-l-4 border-l-[#F3B0A6]", selo: "bg-[#F3B0A6]/40 text-[#8A2E22]", rotulo: "Mesma OS" },
-  2: { borda: "border-l-4 border-l-[#E5766A]", selo: "bg-[#E5766A]/30 text-[#7A2115]", rotulo: "OS + Tipo de serviço" },
-  3: { borda: "border-l-4 border-l-[#B23B2E]", selo: "bg-[#B23B2E]/25 text-[#6B140A]", rotulo: "OS + Tipo + Valor" },
+  1: { borda: "border-l-4 border-l-[#5B8DBE]", selo: "bg-[#5B8DBE]/20 text-[#2A5A85]", rotulo: "Mesma OS" },
+  2: { borda: "border-l-4 border-l-[#C9A227]", selo: "bg-[#C9A227]/20 text-[#8A6D0E]", rotulo: "OS + Tipo de serviço" },
+  3: { borda: "border-l-4 border-l-[#C9752E]", selo: "bg-[#C9752E]/20 text-[#8A4A15]", rotulo: "OS + Tipo + Valor" },
   4: { borda: "border-l-4 border-l-black", selo: "bg-black/85 text-white", rotulo: "OS + Tipo + Valor + Data" },
 };
 
