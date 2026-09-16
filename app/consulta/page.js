@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Search, X, FileDown, Pencil, SearchX, Trash2, AlertTriangle, Ticket, Plus, StickyNote } from "lucide-react";
+import { Search, X, FileDown, Pencil, SearchX, Trash2, AlertTriangle, Ticket, Plus, StickyNote, Flag, ArrowUpDown } from "lucide-react";
 import AppShell from "../../components/AppShell";
 import Modal from "../../components/Modal";
 import CurrencyInput from "../../components/CurrencyInput";
@@ -34,6 +34,8 @@ function Conteudo() {
   const [categoriaId, setCategoriaId] = useState("");
   const [unidadeId, setUnidadeId] = useState("");
   const [resultados, setResultados] = useState(null);
+  const [ordemOs, setOrdemOs] = useState(null); // null | "asc" | "desc"
+  const [apenasDuplicados, setApenasDuplicados] = useState(false);
   const [buscando, setBuscando] = useState(false);
   const [selecionado, setSelecionado] = useState(null);
   const [editando, setEditando] = useState(false);
@@ -327,6 +329,22 @@ function Conteudo() {
     }
   }
 
+  const contagemOs = {};
+  (resultados || []).forEach((r) => {
+    contagemOs[r.numero_os] = (contagemOs[r.numero_os] || 0) + 1;
+  });
+  let resultadosExibidos = resultados || [];
+  if (apenasDuplicados) {
+    resultadosExibidos = resultadosExibidos.filter((r) => contagemOs[r.numero_os] > 1);
+  }
+  if (ordemOs) {
+    resultadosExibidos = [...resultadosExibidos].sort((a, b) => {
+      const na = parseInt(String(a.numero_os).replace(/\D/g, ""), 10) || 0;
+      const nb = parseInt(String(b.numero_os).replace(/\D/g, ""), 10) || 0;
+      return ordemOs === "asc" ? na - nb : nb - na;
+    });
+  }
+
   return (
     <div className="max-w-5xl">
       <div className="mb-6">
@@ -397,7 +415,25 @@ function Conteudo() {
       {resultados && (
         <>
           <div className="flex justify-between items-center mb-3">
-            <p className="text-sm text-muted">{resultados.length} resultado(s)</p>
+            <div className="flex items-center gap-3">
+              <p className="text-sm text-muted">
+                {apenasDuplicados ? resultadosExibidos.length : resultados.length} resultado(s)
+                {apenasDuplicados && (
+                  <span className="text-muted/70"> (só Nº OS repetidos, de {resultados.length} no total)</span>
+                )}
+              </p>
+              <button
+                onClick={() => setApenasDuplicados((v) => !v)}
+                title="Mostrar só os lançamentos com Nº OS repetido"
+                className={
+                  apenasDuplicados
+                    ? "flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border border-transparent bg-[#C9A227] text-white transition"
+                    : "flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border border-line text-muted hover:border-[#C9A227]/50 hover:text-[#8A6D0E] transition"
+                }
+              >
+                <Flag size={12} /> Nº OS repetidos
+              </button>
+            </div>
             {resultados.length > 0 && (
               <button className="btn flex items-center gap-1.5" onClick={exportar}>
                 <FileDown size={14} /> Exportar para Excel
@@ -405,7 +441,7 @@ function Conteudo() {
             )}
           </div>
 
-          {resultados.length === 0 ? (
+          {resultadosExibidos.length === 0 ? (
             <div className="card p-10 flex flex-col items-center text-center text-muted">
               <SearchX size={28} className="mb-2 opacity-60" />
               <p>Nenhum resultado encontrado.</p>
@@ -417,7 +453,11 @@ function Conteudo() {
                   <tr className="text-xs uppercase tracking-wider text-muted border-b border-line">
                     <td className="p-3">Data</td>
                     {mostrarUnidade && <td className="p-3">Unidade</td>}
-                    <td className="p-3">Nº OS</td>
+                    <td className="p-3 cursor-pointer select-none hover:text-ink" onClick={() => setOrdemOs((o) => (o === "asc" ? "desc" : "asc"))}>
+                      <span className="inline-flex items-center gap-1">
+                        Nº OS <ArrowUpDown size={11} />
+                      </span>
+                    </td>
                     <td className="p-3">Categoria</td>
                     <td className="p-3">Tipo de serviço</td>
                     <td className="p-3 text-right">Orçamento</td>
@@ -427,10 +467,14 @@ function Conteudo() {
                   </tr>
                 </thead>
                 <tbody>
-                  {resultados.map((r) => {
+                  {resultadosExibidos.map((r) => {
                     const Icone = iconeCategoria(r.categorias?.nome);
+                    const duplicado = contagemOs[r.numero_os] > 1;
+                    const classeLinha = duplicado
+                      ? "border-t border-line cursor-pointer bg-[#FFF3B0]/60 hover:bg-[#FFF3B0]"
+                      : "border-t border-line cursor-pointer hover:bg-canvas/60";
                     return (
-                      <tr key={r.id} className="border-t border-line hover:bg-canvas/60 cursor-pointer" onClick={() => abrirDetalhe(r)}>
+                      <tr key={r.id} className={classeLinha} onClick={() => abrirDetalhe(r)}>
                         <td className="p-3">{formatarDataBR(r.data)}</td>
                         {mostrarUnidade && <td className="p-3">{r.unidades?.nome}</td>}
                         <td className="p-3 font-mono-num">{r.numero_os}</td>
