@@ -6,6 +6,8 @@ import { useSessao } from "../lib/SessaoContext";
 
 let proximoIdBalao = 1;
 const DURACAO_BALAO_MS = 10000;
+let proximoIdReacao = 1;
+const DURACAO_REACAO_MS = 6000;
 
 function formatarMoeda(v) {
   return Number(v || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 });
@@ -48,9 +50,22 @@ function tocarBip() {
 export default function BalaoNotificacoes() {
   const { usuario } = useSessao();
   const [baloes, setBaloes] = useState([]);
+  const [reacoes, setReacoes] = useState([]);
 
   function removerBalao(id) {
     setBaloes((atual) => atual.filter((b) => b.id !== id));
+  }
+
+  function removerReacao(id) {
+    setReacoes((atual) => atual.filter((r) => r.id !== id));
+  }
+
+  function aoReacao({ payload }) {
+    const id = proximoIdReacao++;
+    // deslocamento horizontal aleatório pra não empilhar tudo no mesmo ponto
+    const offsetX = Math.round((Math.random() - 0.5) * 260);
+    setReacoes((atual) => [...atual, { id, emoji: payload.emoji, login: payload.login, offsetX }]);
+    setTimeout(() => removerReacao(id), DURACAO_REACAO_MS);
   }
 
   function aoNovoLancamento({ payload }) {
@@ -89,6 +104,7 @@ export default function BalaoNotificacoes() {
     const canal = supabase
       .channel("celebracoes")
       .on("broadcast", { event: "novo_lancamento" }, aoNovoLancamento)
+      .on("broadcast", { event: "reacao" }, aoReacao)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "avisos_admin" }, aoNovoAviso)
       .on(
         "postgres_changes",
@@ -102,6 +118,21 @@ export default function BalaoNotificacoes() {
   }, [usuario?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
+    <>
+    <div className="fixed inset-x-0 bottom-0 z-[210] pointer-events-none overflow-hidden" style={{ height: "100vh" }}>
+      {reacoes.map((r) => (
+        <div
+          key={r.id}
+          className="reacao-flutuante absolute bottom-8 left-1/2 flex flex-col items-center"
+          style={{ marginLeft: r.offsetX }}
+        >
+          <span className="text-5xl drop-shadow-lg">{r.emoji}</span>
+          <span className="mt-1 text-[11px] font-semibold text-ink bg-white/90 rounded-full px-2 py-0.5 shadow whitespace-nowrap">
+            @{r.login}
+          </span>
+        </div>
+      ))}
+    </div>
     <div className="fixed bottom-5 right-5 z-[200] flex flex-col-reverse gap-2.5 items-end pointer-events-none max-w-[90vw]">
       {baloes.map((b) => (
         <div key={b.id} className="balao-notificacao pointer-events-auto">
@@ -173,5 +204,6 @@ export default function BalaoNotificacoes() {
         </div>
       ))}
     </div>
+    </>
   );
 }

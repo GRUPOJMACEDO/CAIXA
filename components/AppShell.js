@@ -41,6 +41,7 @@ import BotaoMural from "./BotaoMural";
 import BotaoUsuariosOnline from "./BotaoUsuariosOnline";
 import BotaoAvisoAdmin from "./BotaoAvisoAdmin";
 import BalaoNotificacoes from "./BalaoNotificacoes";
+import BotaoReacoes from "./BotaoReacoes";
 import { SessaoProvider, useSessao } from "../lib/SessaoContext";
 import { supabase } from "../lib/supabaseClient";
 import {
@@ -407,6 +408,7 @@ function Shell({ children }) {
         <main className="p-6 max-w-full overflow-x-hidden">{children}</main>
       </div>
       <BalaoNotificacoes />
+      <BotaoReacoes />
     </div>
   );
 }

@@ -122,3 +122,14 @@ h1, h2, h3, .display {
 .balao-notificacao {
   animation: balaoEntrada 0.28s cubic-bezier(0.22, 1, 0.36, 1);
 }
+
+@keyframes reacaoSubir {
+  0% { opacity: 0; transform: translate(-50%, 0) scale(0.6) rotate(-6deg); }
+  10% { opacity: 1; transform: translate(-50%, -40px) scale(1.15) rotate(4deg); }
+  20% { transform: translate(-50%, -80px) scale(1) rotate(-2deg); }
+  80% { opacity: 1; }
+  100% { opacity: 0; transform: translate(-50%, -520px) scale(1) rotate(2deg); }
+}
+.reacao-flutuante {
+  animation: reacaoSubir 6s cubic-bezier(0.2, 0.6, 0.35, 1) forwards;
+}
