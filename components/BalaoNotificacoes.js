@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { PartyPopper, Sparkles, Megaphone, Check, Copy } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { useSessao } from "../lib/SessaoContext";
+import { configurarCelebracoes, limparCelebracoes } from "../lib/canalCelebracoes";
 
 let proximoIdBalao = 1;
 const DURACAO_BALAO_MS = 10000;
@@ -101,19 +102,19 @@ export default function BalaoNotificacoes() {
 
   useEffect(() => {
     if (!usuario) return;
-    const canal = supabase
-      .channel("celebracoes")
-      .on("broadcast", { event: "novo_lancamento" }, aoNovoLancamento)
-      .on("broadcast", { event: "reacao" }, aoReacao)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "avisos_admin" }, aoNovoAviso)
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "notificacoes_duplicidade", filter: `usuario_id=eq.${usuario.id}` },
-        aoNovaDuplicidade
-      )
-      .subscribe();
+    configurarCelebracoes((canal) => {
+      canal
+        .on("broadcast", { event: "novo_lancamento" }, aoNovoLancamento)
+        .on("broadcast", { event: "reacao" }, aoReacao)
+        .on("postgres_changes", { event: "INSERT", schema: "public", table: "avisos_admin" }, aoNovoAviso)
+        .on(
+          "postgres_changes",
+          { event: "INSERT", schema: "public", table: "notificacoes_duplicidade", filter: `usuario_id=eq.${usuario.id}` },
+          aoNovaDuplicidade
+        );
+    });
     return () => {
-      supabase.removeChannel(canal);
+      limparCelebracoes();
     };
   }, [usuario?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 

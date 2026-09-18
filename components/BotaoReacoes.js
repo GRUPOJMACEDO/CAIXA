@@ -1,12 +1,46 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { supabase } from "../lib/supabaseClient";
 import { useSessao } from "../lib/SessaoContext";
+import { enviarCelebracao } from "../lib/canalCelebracoes";
 
-// mesmo conjunto de ícones pedido pelo usuário, nessa ordem
-const ICONES_REACAO = ["❤️", "👍", "🎉", "👏", "😂", "😮", "😢", "🤔", "👎"];
+// mesmo conjunto de ícones pedido pelo usuário, nessa ordem, + os novos
+// (dinheiro, fogo, fogos, festa, saco de dinheiro)
+const ICONES_REACAO = ["❤️", "👍", "🎉", "👏", "😂", "😮", "😢", "🤔", "👎", "💵", "🔥", "🎆", "🎊", "💰"];
+
+// ícone(s) de dinheiro que disparam o som de caixa registradora
+const ICONES_DINHEIRO = ["💵", "💰"];
 
 const COOLDOWN_MS = 2500;
+
+/** Som de "cash" (caixa registradora), tocado ao selecionar um ícone de dinheiro. */
+function tocarSomDinheiro() {
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    const tocarNota = (frequencia, inicioEm, duracao, tipo = "triangle") => {
+      const osc = ctx.createOscillator();
+      const ganho = ctx.createGain();
+      osc.type = tipo;
+      osc.frequency.value = frequencia;
+      const t0 = ctx.currentTime + inicioEm;
+      ganho.gain.setValueAtTime(0.0001, t0);
+      ganho.gain.exponentialRampToValueAtTime(0.22, t0 + 0.015);
+      ganho.gain.exponentialRampToValueAtTime(0.0001, t0 + duracao);
+      osc.connect(ganho);
+      ganho.connect(ctx.destination);
+      osc.start(t0);
+      osc.stop(t0 + duracao + 0.02);
+    };
+    if (ctx.state === "suspended") ctx.resume();
+    // arpejo rápido subindo, tipo "cha-ching" de caixa registradora
+    tocarNota(660, 0, 0.12);
+    tocarNota(880, 0.06, 0.14);
+    tocarNota(1320, 0.12, 0.28);
+  } catch {
+    // navegador sem suporte a áudio — segue em silêncio, sem quebrar nada
+  }
+}
 
 /**
  * Botão de reações — fica no topo da barra lateral, logo acima do logo
@@ -21,18 +55,7 @@ export default function BotaoReacoes({ recolhido = false }) {
   const { usuario } = useSessao();
   const [aberto, setAberto] = useState(false);
   const [emCooldown, setEmCooldown] = useState(false);
-  const canalRef = useRef(null);
   const painelRef = useRef(null);
-
-  useEffect(() => {
-    if (!usuario) return;
-    const canal = supabase.channel("celebracoes").subscribe();
-    canalRef.current = canal;
-    return () => {
-      supabase.removeChannel(canal);
-      canalRef.current = null;
-    };
-  }, [usuario?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     function aoClicarFora(e) {
@@ -45,12 +68,9 @@ export default function BotaoReacoes({ recolhido = false }) {
   }, [aberto]);
 
   function enviarReacao(emoji) {
-    if (emCooldown || !canalRef.current) return;
-    canalRef.current.send({
-      type: "broadcast",
-      event: "reacao",
-      payload: { login: usuario?.login || "—", emoji },
-    });
+    if (emCooldown) return;
+    enviarCelebracao("reacao", { login: usuario?.login || "—", emoji });
+    if (ICONES_DINHEIRO.includes(emoji)) tocarSomDinheiro();
     setEmCooldown(true);
     setTimeout(() => setEmCooldown(false), COOLDOWN_MS);
     setAberto(false);
