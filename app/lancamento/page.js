@@ -40,13 +40,15 @@ function FormularioLancamento() {
   const unidadeUnica = unidadesDaLinha.length === 1;
   const [unidadeId, setUnidadeId] = useState("");
   const categoriasVisiveis = categorias.filter((c) => {
-    // categorias com unidade_restrita_id (ex: WSM/ACN/REF → ESC Santos) só
-    // existem para aquela unidade, em qualquer Linha (CI ou IH) — a regra de
-    // "somente_ih" não se aplica a elas, o filtro é só a unidade
-    if (c.unidade_restrita_id) return c.unidade_restrita_id === unidadeId;
-    if (linhaFixaUsuario === "ih") return c.somente_ih || c.nome === "Acessório"; // login só-IH: categorias de IH + Acessório (não é exclusiva de nenhuma linha)
+    // unidade_restrita_id é uma LIBERAÇÃO EXTRA, não uma restrição: uma
+    // categoria de IH (ex: WSM/ACN/REF) continua aparecendo normalmente pra
+    // qualquer unidade quando a Linha for IH — e, além disso, aparece também
+    // pra essa unidade específica mesmo com a Linha em CI (ex: ESC Santos,
+    // que não é unidade de IH mas precisa lançar WSM/ACN/REF)
+    const liberadaPelaUnidade = c.unidade_restrita_id && c.unidade_restrita_id === unidadeId;
+    if (linhaFixaUsuario === "ih") return c.somente_ih || c.nome === "Acessório" || liberadaPelaUnidade; // login só-IH: categorias de IH + Acessório (não é exclusiva de nenhuma linha)
     if (linhaOperacao === "ih") return true; // gestão em modo IH: vê tudo
-    return !c.somente_ih; // CI (fixo ou gestão em modo CI): esconde as exclusivas de IH
+    return !c.somente_ih || liberadaPelaUnidade; // CI (fixo ou gestão em modo CI): esconde as exclusivas de IH, exceto liberação extra
   });
   const [data, setData] = useState(hoje());
   const [numeroOsDigitado, setNumeroOsDigitado] = useState("");
