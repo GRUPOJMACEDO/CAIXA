@@ -21,6 +21,11 @@ function gerarIdLinhaConsulta() {
   return proximoIdLinhaConsulta++;
 }
 
+const TAMANHO_PAGINA = 200;
+
+const COLUNAS_LANCAMENTO =
+  "id, data, numero_os, valor_pago, orcamento_aprovado, forma_pagamento, parcelas, bandeira, formas_pagamento, observacoes, linha, unidade_id, categoria_id, tipo_servico_id, atendente_id, unidades(nome), categorias(nome), tipos_servico(nome), usuarios!atendente_id(nome_completo)";
+
 function Conteudo() {
   const { usuario, unidades, linhaFiltro } = useSessao();
   const parametrosUrl = useSearchParams();
@@ -34,6 +39,12 @@ function Conteudo() {
   const [categoriaId, setCategoriaId] = useState("");
   const [unidadeId, setUnidadeId] = useState("");
   const [resultados, setResultados] = useState(null);
+  const [totalResultados, setTotalResultados] = useState(0);
+  const [pagina, setPagina] = useState(0);
+  const [temMais, setTemMais] = useState(false);
+  const [carregandoMais, setCarregandoMais] = useState(false);
+  const [contagemOsCompleta, setContagemOsCompleta] = useState({});
+  const [exportando, setExportando] = useState(false);
   const [ordemOs, setOrdemOs] = useState(null); // null | "asc" | "desc"
   const [apenasDuplicados, setApenasDuplicados] = useState(false);
   const [buscando, setBuscando] = useState(false);
@@ -74,32 +85,78 @@ function Conteudo() {
     supabase.from("categorias").select("*").order("nome").then(({ data }) => setCategorias(data || []));
   }, []);
 
+  // Aplica os mesmos filtros de busca (período, categoria, unidade já vem no
+  // query base) em qualquer query de lançamentos — reusado pela busca
+  // paginada, pela contagem de Nº OS repetidos (período inteiro) e pela
+  // exportação (período inteiro, sem paginação).
+  function aplicarFiltros(query, numeroOsEfetivo) {
+    let q = query;
+    if (linhaFiltro) q = q.eq("linha", linhaFiltro);
+    if (numeroOsEfetivo.trim()) q = q.ilike("numero_os", `%${numeroOsEfetivo.trim().toUpperCase()}%`);
+    if (modoPeriodo === "semana") {
+      const semana = semanas.find((s) => s.valor === semanaSelecionada) || semanas[0];
+      q = q.gte("data", semana.inicio).lte("data", semana.fim);
+    } else {
+      if (dataDe) q = q.gte("data", dataDe);
+      if (dataAte) q = q.lte("data", dataAte);
+    }
+    if (categoriaId) q = q.eq("categoria_id", categoriaId);
+    return q;
+  }
+
   async function buscar(e, numeroOsParam) {
     e.preventDefault();
     const numeroOsEfetivo = numeroOsParam ?? numeroOs;
     setBuscando(true);
+    setPagina(0);
+
     let query = supabase
       .from("lancamentos")
-      .select(
-        "id, data, numero_os, valor_pago, orcamento_aprovado, forma_pagamento, parcelas, bandeira, formas_pagamento, observacoes, linha, unidade_id, categoria_id, tipo_servico_id, atendente_id, unidades(nome), categorias(nome), tipos_servico(nome), usuarios!atendente_id(nome_completo)"
-      )
+      .select(COLUNAS_LANCAMENTO, { count: "exact" })
       .in("unidade_id", unidadeId ? [unidadeId] : unidades.map((u) => u.id))
-      .order("data", { ascending: false });
+      .order("data", { ascending: false })
+      .range(0, TAMANHO_PAGINA - 1);
+    query = aplicarFiltros(query, numeroOsEfetivo);
 
-    if (linhaFiltro) query = query.eq("linha", linhaFiltro);
-    if (numeroOsEfetivo.trim()) query = query.ilike("numero_os", `%${numeroOsEfetivo.trim().toUpperCase()}%`);
-    if (modoPeriodo === "semana") {
-      const semana = semanas.find((s) => s.valor === semanaSelecionada) || semanas[0];
-      query = query.gte("data", semana.inicio).lte("data", semana.fim);
-    } else {
-      if (dataDe) query = query.gte("data", dataDe);
-      if (dataAte) query = query.lte("data", dataAte);
-    }
-    if (categoriaId) query = query.eq("categoria_id", categoriaId);
+    const { data, count } = await query;
+    const total = count ?? (data || []).length;
+    setResultados(data || []);
+    setTotalResultados(total);
+    setTemMais(total > (data || []).length);
+    setBuscando(false);
+
+    // Busca leve — só a coluna numero_os — cobrindo o período inteiro (sem
+    // paginação), para detectar "Nº OS repetidos" mesmo fora das linhas já
+    // carregadas na tela.
+    let queryOs = supabase
+      .from("lancamentos")
+      .select("numero_os")
+      .in("unidade_id", unidadeId ? [unidadeId] : unidades.map((u) => u.id));
+    queryOs = aplicarFiltros(queryOs, numeroOsEfetivo);
+    const { data: dadosOs } = await queryOs;
+    const contagem = {};
+    (dadosOs || []).forEach((r) => {
+      contagem[r.numero_os] = (contagem[r.numero_os] || 0) + 1;
+    });
+    setContagemOsCompleta(contagem);
+  }
+
+  async function carregarMais() {
+    setCarregandoMais(true);
+    const proximaPagina = pagina + 1;
+    let query = supabase
+      .from("lancamentos")
+      .select(COLUNAS_LANCAMENTO)
+      .in("unidade_id", unidadeId ? [unidadeId] : unidades.map((u) => u.id))
+      .order("data", { ascending: false })
+      .range(proximaPagina * TAMANHO_PAGINA, proximaPagina * TAMANHO_PAGINA + TAMANHO_PAGINA - 1);
+    query = aplicarFiltros(query, numeroOs);
 
     const { data } = await query;
-    setResultados(data || []);
-    setBuscando(false);
+    setResultados((atual) => [...(atual || []), ...(data || [])]);
+    setPagina(proximaPagina);
+    setTemMais((proximaPagina + 1) * TAMANHO_PAGINA < totalResultados);
+    setCarregandoMais(false);
   }
 
   function limpar() {
@@ -110,11 +167,26 @@ function Conteudo() {
     setCategoriaId("");
     setUnidadeId("");
     setResultados(null);
+    setTotalResultados(0);
+    setPagina(0);
+    setTemMais(false);
+    setContagemOsCompleta({});
   }
 
   async function exportar() {
+    setExportando(true);
+    // Exporta o período inteiro da busca, não só as linhas já carregadas na
+    // tela — por isso refaz a busca sem o limite de página.
+    let query = supabase
+      .from("lancamentos")
+      .select(COLUNAS_LANCAMENTO)
+      .in("unidade_id", unidadeId ? [unidadeId] : unidades.map((u) => u.id))
+      .order("data", { ascending: false });
+    query = aplicarFiltros(query, numeroOs);
+    const { data: dadosCompletos } = await query;
+
     const XLSX = await import("xlsx");
-    const linhasExport = resultados.map((l) => {
+    const linhasExport = (dadosCompletos || []).map((l) => {
       const linha = {
         Data: formatarDataBR(l.data),
         ...(mostrarUnidade ? { Unidade: l.unidades?.nome || "" } : {}),
@@ -135,6 +207,7 @@ function Conteudo() {
     const livro = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(livro, planilha, "Consulta");
     XLSX.writeFile(livro, `consulta-caixa-jmacedo-${hojeBrasil()}.xlsx`);
+    setExportando(false);
   }
 
   useEffect(() => {
@@ -329,10 +402,10 @@ function Conteudo() {
     }
   }
 
-  const contagemOs = {};
-  (resultados || []).forEach((r) => {
-    contagemOs[r.numero_os] = (contagemOs[r.numero_os] || 0) + 1;
-  });
+  // Contagem de Nº OS repetidos vem da busca leve (período inteiro), não só
+  // das linhas já carregadas — assim a marcação de duplicado é sempre
+  // correta mesmo com paginação.
+  const contagemOs = contagemOsCompleta;
   let resultadosExibidos = resultados || [];
   if (apenasDuplicados) {
     resultadosExibidos = resultadosExibidos.filter((r) => contagemOs[r.numero_os] > 1);
@@ -417,14 +490,13 @@ function Conteudo() {
           <div className="flex justify-between items-center mb-3">
             <div className="flex items-center gap-3">
               <p className="text-sm text-muted">
-                {apenasDuplicados ? resultadosExibidos.length : resultados.length} resultado(s)
-                {apenasDuplicados && (
-                  <span className="text-muted/70"> (só Nº OS repetidos, de {resultados.length} no total)</span>
-                )}
+                {apenasDuplicados
+                  ? `${resultadosExibidos.length} resultado(s) (só Nº OS repetidos, de ${totalResultados} no total)`
+                  : `${resultados.length} de ${totalResultados} resultado(s) carregado(s)`}
               </p>
               <button
                 onClick={() => setApenasDuplicados((v) => !v)}
-                title="Mostrar só os lançamentos com Nº OS repetido"
+                title="Mostrar só os lançamentos com Nº OS repetido (considera o período inteiro)"
                 className={
                   apenasDuplicados
                     ? "flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border border-transparent bg-[#C9A227] text-white transition"
@@ -435,8 +507,8 @@ function Conteudo() {
               </button>
             </div>
             {resultados.length > 0 && (
-              <button className="btn flex items-center gap-1.5" onClick={exportar}>
-                <FileDown size={14} /> Exportar para Excel
+              <button className="btn flex items-center gap-1.5 disabled:opacity-50" onClick={exportar} disabled={exportando}>
+                <FileDown size={14} /> {exportando ? "Exportando…" : "Exportar para Excel"}
               </button>
             )}
           </div>
@@ -533,6 +605,13 @@ function Conteudo() {
                   })}
                 </tbody>
               </table>
+              {temMais && !apenasDuplicados && (
+                <div className="flex justify-center p-3 border-t border-line">
+                  <button className="btn flex items-center gap-1.5 disabled:opacity-50" onClick={carregarMais} disabled={carregandoMais}>
+                    {carregandoMais ? "Carregando…" : `Carregar mais (${totalResultados - resultados.length} restante(s))`}
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </>

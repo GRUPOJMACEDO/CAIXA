@@ -4,8 +4,8 @@ import { Users, X } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { useSessao } from "../lib/SessaoContext";
 
-const JANELA_ONLINE_MS = 2 * 60 * 1000; // considera "online" quem deu sinal nos últimos 2 min
-const INTERVALO_VERIFICACAO_MS = 20000;
+const JANELA_ONLINE_MS = 3 * 60 * 1000; // considera "online" quem deu sinal nos últimos 3 min
+const INTERVALO_VERIFICACAO_MS = 90000; // era 20s — reduz consumo de egress
 
 function BolinhaOnline({ size = 10 }) {
   return (
@@ -45,7 +45,7 @@ export default function BotaoUsuariosOnline() {
   useEffect(() => {
     enviarSinal();
     verificarOnline().finally(() => setCarregandoInicial(false));
-    const intervaloSinal = setInterval(enviarSinal, 40000);
+    const intervaloSinal = setInterval(enviarSinal, 60000); // era 40s — reduz consumo de egress
     const intervaloVerifica = setInterval(verificarOnline, INTERVALO_VERIFICACAO_MS);
     return () => {
       clearInterval(intervaloSinal);

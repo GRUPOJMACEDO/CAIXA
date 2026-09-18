@@ -257,7 +257,7 @@ function Shell({ children }) {
       setContadorDuplicidades(gruposPendentes.size);
     }
     verificar();
-    const intervalo = setInterval(verificar, 45000);
+    const intervalo = setInterval(verificar, 240000); // 4 min (era 45s — reduz consumo de egress)
     return () => clearInterval(intervalo);
   }, [usuario?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
