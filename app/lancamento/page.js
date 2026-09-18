@@ -37,14 +37,16 @@ function FormularioLancamento() {
   const [linhaOperacao, setLinhaOperacao] = useState(linhaFixaUsuario || (modoLinha === "ih" ? "ih" : "ci"));
   const precisaEscolherLinha = !linhaFixaUsuario;
   const unidadesDaLinha = unidades.filter((u) => (linhaOperacao === "ih" ? u.atende_ih : u.atende_ci));
+  const unidadeUnica = unidadesDaLinha.length === 1;
+  const [unidadeId, setUnidadeId] = useState("");
   const categoriasVisiveis = categorias.filter((c) => {
+    // categorias com unidade_restrita_id só aparecem quando a unidade
+    // selecionada no formulário for exatamente aquela (ex: WSM/ACN/REF → ESC Santos)
+    if (c.unidade_restrita_id && c.unidade_restrita_id !== unidadeId) return false;
     if (linhaFixaUsuario === "ih") return c.somente_ih || c.nome === "Acessório"; // login só-IH: categorias de IH + Acessório (não é exclusiva de nenhuma linha)
     if (linhaOperacao === "ih") return true; // gestão em modo IH: vê tudo
     return !c.somente_ih; // CI (fixo ou gestão em modo CI): esconde as exclusivas de IH
   });
-
-  const unidadeUnica = unidadesDaLinha.length === 1;
-  const [unidadeId, setUnidadeId] = useState("");
   const [data, setData] = useState(hoje());
   const [numeroOsDigitado, setNumeroOsDigitado] = useState("");
   const [erroOs, setErroOs] = useState(null);
@@ -97,7 +99,7 @@ function FormularioLancamento() {
     if (categoriaId && !categoriasVisiveis.some((c) => c.id === categoriaId)) {
       setCategoriaId("");
     }
-  }, [linhaOperacao]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [linhaOperacao, unidadeId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // tipos de serviço dependem da categoria escolhida (modelo é buscado pelo ComboBoxModelo)
   useEffect(() => {
