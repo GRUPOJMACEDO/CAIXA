@@ -286,7 +286,10 @@ function Shell({ children }) {
   return (
     <div className="min-h-screen flex bg-canvas">
       <aside className={`${largura} shrink-0 bg-sidebar border-r border-line text-ink flex flex-col sticky top-0 h-screen transition-all duration-200 print:hidden`}>
-        <div className={`${recolhido ? "px-3 py-4 flex justify-center" : "px-4 py-3"} border-b border-line`}>
+        <div className={`${recolhido ? "px-3 pt-3 pb-1 flex justify-center" : "px-4 pt-3 pb-1"}`}>
+          <BotaoReacoes recolhido={recolhido} />
+        </div>
+        <div className={`${recolhido ? "px-3 pb-4 flex justify-center" : "px-4 pb-3"} border-b border-line`}>
           <img src="/logos/grupo-jmacedo.png" alt="Grupo J.Macedo Eletrônica" className={recolhido ? "h-10 w-auto" : "w-full h-auto"} />
         </div>
 
@@ -408,7 +411,6 @@ function Shell({ children }) {
         <main className="p-6 max-w-full overflow-x-hidden">{children}</main>
       </div>
       <BalaoNotificacoes />
-      <BotaoReacoes />
     </div>
   );
 }

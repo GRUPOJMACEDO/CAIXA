@@ -133,3 +133,12 @@ h1, h2, h3, .display {
 .reacao-flutuante {
   animation: reacaoSubir 6s cubic-bezier(0.2, 0.6, 0.35, 1) forwards;
 }
+
+@keyframes botaoReacoesPisca {
+  0%, 82%, 100% { box-shadow: 0 3px 0 0 rgba(0,0,0,0.18), 0 8px 16px -4px rgba(184,134,46,0.55), 0 0 0 0 rgba(217,168,62,0); }
+  88% { box-shadow: 0 3px 0 0 rgba(0,0,0,0.18), 0 8px 16px -4px rgba(184,134,46,0.55), 0 0 0 7px rgba(217,168,62,0.35); }
+  94% { box-shadow: 0 3px 0 0 rgba(0,0,0,0.18), 0 8px 16px -4px rgba(184,134,46,0.55), 0 0 0 2px rgba(217,168,62,0.5); }
+}
+.botao-reacoes-pisca {
+  animation: botaoReacoesPisca 7s ease-in-out infinite;
+}
