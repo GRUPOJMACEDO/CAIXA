@@ -9,7 +9,7 @@ import FormasPagamentoModal from "../../components/FormasPagamentoModal";
 import { supabase } from "../../lib/supabaseClient";
 import { useSessao } from "../../lib/SessaoContext";
 import { hojeBrasil } from "../../lib/fusoHorario";
-import { podeAlterar, podeExcluirLancamento, podeLancarDataRetroativa } from "../../lib/permissions";
+import { podeAlterar, podeExcluirLancamento, podeLancarDataRetroativa, podeExportarConsulta } from "../../lib/permissions";
 import { iconeCategoria } from "../../lib/iconesCategoria";
 import { formatarDataBR, formatarMoedaSemSimbolo } from "../../lib/formato";
 import { FORMAS_PAGAMENTO, BANDEIRAS, precisaParcelas as precisaParcelasFn, precisaBandeira as precisaBandeiraFn } from "../../lib/formasPagamento";
@@ -72,6 +72,7 @@ function Conteudo() {
   const podeEditar = podeAlterar(usuario.cargo, usuario.linha);
   const podeEditarData = podeLancarDataRetroativa(usuario.cargo);
   const podeExcluir = podeExcluirLancamento(usuario.cargo);
+  const podeExportar = podeExportarConsulta(usuario.cargo);
 
   useEffect(() => {
     const osDaUrl = parametrosUrl.get("os");
@@ -506,7 +507,7 @@ function Conteudo() {
                 <Flag size={12} /> Nº OS repetidos
               </button>
             </div>
-            {resultados.length > 0 && (
+            {resultados.length > 0 && podeExportar && (
               <button className="btn flex items-center gap-1.5 disabled:opacity-50" onClick={exportar} disabled={exportando}>
                 <FileDown size={14} /> {exportando ? "Exportando…" : "Exportar para Excel"}
               </button>
