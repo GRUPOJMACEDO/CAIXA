@@ -50,6 +50,7 @@ import {
   podeConfigCategorias,
   podeConfigModelos,
   podeConfigUnidades,
+  podeConfigTecnicos,
   podeConfigUsuarios,
   podeConfigMetas,
   temAcessoConfiguracoes,
@@ -85,6 +86,7 @@ export const NAV_DASHBOARD = [
   { href: "/dashboard/metas", label: "Metas", icon: Target, descricao: "Progresso da meta mensal de cada unidade." },
   { href: "/dashboard/ow", label: "Orçamentos (OW)", icon: Receipt, descricao: "Todas as vendas do mês, por unidade — exceto acessórios." },
   { href: "/dashboard/vendedores", label: "Vendedores", icon: UserCheck, descricao: "Ranking de vendas de acessórios por atendente." },
+  { href: "/dashboard/tecnicos", label: "Técnicos", icon: Briefcase, descricao: "Ranking de vendas por técnico, nas unidades IH." },
   { href: "/dashboard/acessorios", label: "Acessórios", icon: Cable, descricao: "Vendas de acessórios por tipo de item." },
 ];
 
@@ -93,7 +95,7 @@ export function navConfiguracoes(cargo) {
   if (podeConfigTiposServico(cargo)) itens.push({ href: "/configuracoes/tipos-servico", label: "Tipos de serviço", icon: Wrench, descricao: "Cadastro dos tipos de serviço prestados." });
   if (podeConfigCategorias(cargo)) itens.push({ href: "/configuracoes/categorias", label: "Categorias", icon: Tags, descricao: "Categorias de produto (Celular, TV, Tablet...)." });
   if (podeConfigModelos(cargo)) itens.push({ href: "/configuracoes/modelos", label: "Modelos", icon: Boxes, descricao: "Modelos de produto atendidos, por categoria." });
-  if (podeConfigUnidades(cargo)) itens.push({ href: "/configuracoes/unidades", label: "Unidades", icon: Store, descricao: "Lojas do grupo e seus códigos internos." });
+  if (podeConfigUnidades(cargo) || podeConfigTecnicos(cargo)) itens.push({ href: "/configuracoes/unidades", label: "Unidades", icon: Store, descricao: "Lojas do grupo e seus códigos internos." });
   if (podeConfigUsuarios(cargo)) itens.push({ href: "/configuracoes/usuarios", label: "Usuários", icon: Users, descricao: "Logins, cargos e unidades autorizadas." });
   if (podeConfigMetas(cargo)) itens.push({ href: "/configuracoes/metas", label: "Metas", icon: Target, descricao: "Meta mensal de cada unidade." });
   if (podeVerLogAuditoria(cargo)) itens.push({ href: "/configuracoes/log", label: "Log do sistema", icon: ScrollText, descricao: "Histórico de alterações no sistema." });
@@ -117,6 +119,7 @@ const CORES_ITEM = {
   "/dashboard/metas": "#B8862E",
   "/dashboard/ow": "#9C5A34",
   "/dashboard/vendedores": "#0E7A72",
+  "/dashboard/tecnicos": "#2E7D5B",
   "/dashboard/acessorios": "#9B5FB0",
   "/configuracoes/tipos-servico": "#5B6B84",
   "/configuracoes/categorias": "#C9A227",

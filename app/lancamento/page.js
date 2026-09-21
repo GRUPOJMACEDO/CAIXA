@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { Save, ReceiptText, Store, CalendarDays, Hash, Tags, Boxes, Wrench, Wallet, CircleDollarSign, CreditCard, Layers, Landmark, StickyNote, Ticket, Pencil, Trash2, Plus, X, Route } from "lucide-react";
+import { Save, ReceiptText, Store, CalendarDays, Hash, Tags, Boxes, Wrench, Wallet, CircleDollarSign, CreditCard, Layers, Landmark, StickyNote, Ticket, Pencil, Trash2, Plus, X, Route, HardHat } from "lucide-react";
 import AppShell from "../../components/AppShell";
 import CurrencyInput from "../../components/CurrencyInput";
 import ComboBoxModelo from "../../components/ComboBoxModelo";
@@ -56,6 +56,8 @@ function FormularioLancamento() {
   const [categoriaId, setCategoriaId] = useState("");
   const [modeloId, setModeloId] = useState("");
   const [tipoServicoId, setTipoServicoId] = useState("");
+  const [tecnicoId, setTecnicoId] = useState("");
+  const [tecnicos, setTecnicos] = useState([]);
   const [orcamento, setOrcamento] = useState("");
   const [valorPago, setValorPago] = useState("");
   const [formaPagamento, setFormaPagamento] = useState("");
@@ -95,6 +97,23 @@ function FormularioLancamento() {
   useEffect(() => {
     supabase.from("categorias").select("*").order("nome").then(({ data }) => setCategorias(data || []));
   }, []);
+
+  // técnico responsável (só faz sentido em IH) — lista os técnicos ativos
+  // cadastrados para a unidade escolhida
+  useEffect(() => {
+    setTecnicoId("");
+    if (linhaOperacao !== "ih" || !unidadeId) {
+      setTecnicos([]);
+      return;
+    }
+    supabase
+      .from("tecnicos")
+      .select("*")
+      .eq("unidade_id", unidadeId)
+      .eq("ativo", true)
+      .order("nome")
+      .then(({ data }) => setTecnicos(data || []));
+  }, [linhaOperacao, unidadeId]);
 
   // se a categoria escolhida for exclusiva de IH e a linha virar CI, zera a
   // seleção (a categoria não existe mais nas opções visíveis)
@@ -211,6 +230,7 @@ function FormularioLancamento() {
       categoria_id: categoriaId,
       modelo_id: modeloId || null,
       tipo_servico_id: tipoServicoId,
+      tecnico_id: linhaOperacao === "ih" ? tecnicoId || null : null,
       linha: linhaOperacao,
       orcamento_aprovado: Number(orcamento) || 0,
       valor_pago: valorPagoEfetivo,
@@ -239,6 +259,7 @@ function FormularioLancamento() {
     setCategoriaId("");
     setModeloId("");
     setTipoServicoId("");
+    setTecnicoId("");
     setOrcamento("");
     setValorPago("");
     setFormaPagamento("");
@@ -439,6 +460,18 @@ function FormularioLancamento() {
             <p className="text-xs text-danger mt-1">Nenhum tipo de serviço cadastrado para essa categoria — avise a Configurações.</p>
           )}
         </div>
+
+        {linhaOperacao === "ih" && (
+          <div>
+            <Rotulo icone={HardHat}>Técnico <span className="normal-case text-muted">(opcional)</span></Rotulo>
+            <select className="field-input" value={tecnicoId} onChange={(e) => setTecnicoId(e.target.value)}>
+              <option value="">{tecnicos.length ? "Selecione" : "Nenhum técnico cadastrado"}</option>
+              {tecnicos.map((t) => (
+                <option key={t.id} value={t.id}>{t.nome}</option>
+              ))}
+            </select>
+          </div>
+        )}
 
         <div>
           <Rotulo icone={Wallet}>Orçamento aprovado <span className="normal-case text-muted">(opcional)</span></Rotulo>
