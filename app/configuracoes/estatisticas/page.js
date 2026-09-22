@@ -370,6 +370,13 @@ function Conteudo() {
   // Abre o popup com os lançamentos que compõem os valores de uma unidade
   // clicada na comparação — respeita os mesmos filtros (Linha/Categoria/
   // Período) e o modo de taxa da tabela em que o clique aconteceu.
+  //
+  // Critério (igual ao das RPCs de comparação/cards): se a OS teve QUALQUER
+  // lançamento dentro do período escolhido, ela entra inteira — com todos
+  // os seus lançamentos que casam com os filtros, não só os que caem
+  // dentro da janela de datas. Por isso buscamos numa janela mais larga
+  // (o contexto já usado pelos gráficos) e depois filtramos client-side
+  // pelas OS que "tocaram" o período selecionado.
   async function abrirDetalheUnidade(unidadeId, nome, cor, modoTaxa) {
     setDetalheUnidade({ unidadeId, nome, cor, modoTaxa });
     setCarregandoDetalhe(true);
@@ -377,8 +384,8 @@ function Conteudo() {
       .from("lancamentos")
       .select("id, data, numero_os, valor_pago, categorias(nome), tipos_servico(nome)")
       .eq("unidade_id", unidadeId)
-      .gte("data", intervaloFoco.inicio)
-      .lt("data", intervaloFoco.fimExcl)
+      .gte("data", intervaloContexto.inicio)
+      .lt("data", diaSeguinte(hojeBrasil()))
       .order("numero_os", { ascending: true })
       .order("data", { ascending: false });
     if (linhaFiltro) query = query.eq("linha", linhaFiltro);
@@ -393,7 +400,14 @@ function Conteudo() {
       return !ehTaxa; // "excluir"
     });
 
-    setLancamentosDetalhe(linhas);
+    // OS que tiveram QUALQUER lançamento (já filtrado) dentro do período
+    // selecionado — essas entram inteiras, com todos os seus lançamentos.
+    const osNoPeriodo = new Set(
+      linhas.filter((l) => l.data >= intervaloFoco.inicio && l.data < intervaloFoco.fimExcl).map((l) => l.numero_os)
+    );
+    const linhasFinais = linhas.filter((l) => osNoPeriodo.has(l.numero_os));
+
+    setLancamentosDetalhe(linhasFinais);
     setCarregandoDetalhe(false);
   }
 
