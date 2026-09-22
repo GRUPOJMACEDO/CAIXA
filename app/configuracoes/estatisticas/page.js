@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   BarChart3,
   Calendar,
@@ -17,6 +17,11 @@ import {
   Grid3x3,
   DollarSign,
   Route,
+  Scale,
+  ReceiptText,
+  Check,
+  ChevronDown,
+  X,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -100,6 +105,63 @@ function categoriaEfetiva(nome) {
   return nome === "TV" || nome === "DTV" ? "DTV" : nome;
 }
 
+// Cores fixas pra comparação entre unidades — cada unidade selecionada
+// mantém a mesma cor nas duas tabelas de comparação (geral e de taxas).
+const CORES_COMPARACAO = ["#2670B5", "#0E7A72", "#B8862E", "#7C56B5", "#B23B2E", "#2E7D5B", "#9C6B14", "#4A6FA5"];
+
+function TabelaComparacaoUnidades({ titulo, subtitulo, icone: Icone, corAccent, dados, unidadeIds, corFn, nomeFn, carregando, rotuloTicket }) {
+  const linhas = unidadeIds
+    .map((id) => dados.find((d) => d.unidade_id === id) || { unidade_id: id, qtd_os: 0, valor_total: 0 })
+    .map((d) => ({ ...d, ticket_medio: Number(d.qtd_os) > 0 ? Number(d.valor_total) / Number(d.qtd_os) : 0 }));
+  const maxTicket = Math.max(1, ...linhas.map((l) => l.ticket_medio));
+
+  return (
+    <div className="card p-5 mb-6">
+      <p className="text-sm font-semibold text-ink mb-1 flex items-center gap-1.5" style={{ color: corAccent }}>
+        <Icone size={14} /> {titulo}
+      </p>
+      <p className="text-xs text-muted mb-4">{subtitulo}</p>
+      {carregando ? (
+        <p className="text-sm text-muted py-10 text-center">Carregando…</p>
+      ) : (
+        <div className="space-y-3">
+          {linhas.map((l) => {
+            const cor = corFn(l.unidade_id);
+            const pct = Math.max(4, Math.round((l.ticket_medio / maxTicket) * 100));
+            return (
+              <div key={l.unidade_id} className="rounded-xl border border-line overflow-hidden">
+                <div className="flex items-center gap-2 px-4 py-2" style={{ background: `${cor}12` }}>
+                  <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: cor }} />
+                  <span className="text-sm font-semibold text-ink truncate">{nomeFn(l.unidade_id)}</span>
+                </div>
+                <div className="grid grid-cols-3 gap-3 px-4 py-3">
+                  <div>
+                    <p className="text-[11px] text-muted flex items-center gap-1 mb-0.5"><Hash size={11} /> Qtd. OS</p>
+                    <p className="font-mono-num text-base font-semibold text-ink">{l.qtd_os}</p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] text-muted flex items-center gap-1 mb-0.5"><DollarSign size={11} /> Vlr. vendido</p>
+                    <p className="font-mono-num text-base font-semibold text-ink">R$ {formatarMoedaSemSimbolo(l.valor_total)}</p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] text-muted flex items-center gap-1 mb-0.5"><Percent size={11} /> {rotuloTicket}</p>
+                    <p className="font-mono-num text-base font-semibold text-ink">R$ {formatarMoedaSemSimbolo(l.ticket_medio)}</p>
+                  </div>
+                </div>
+                <div className="px-4 pb-3">
+                  <div className="w-full h-2 rounded-full bg-canvas overflow-hidden">
+                    <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: cor }} />
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Conteudo() {
   const { usuario, unidades, marcasDisponiveis } = useSessao();
   const permitido = podeVerEstatisticas(usuario.cargo);
@@ -116,6 +178,7 @@ function Conteudo() {
   const [linhaFiltro, setLinhaFiltro] = useState(""); // "" | "ci" | "ih"
   const [categoriaFiltro, setCategoriaFiltro] = useState(""); // "" | nome efetivo da categoria
   const [categoriasDisponiveis, setCategoriasDisponiveis] = useState([]);
+  const [incluirTaxa, setIncluirTaxa] = useState(true); // marcado = totais incluem taxas de análise/visita
   const [carregando, setCarregando] = useState(true);
 
   const [kpis, setKpis] = useState({ registros: 0, valorTotal: 0, ticketMedio: 0, horaPico: null });
@@ -123,6 +186,23 @@ function Conteudo() {
   const [porHora, setPorHora] = useState([]);
   const [mapaCalor, setMapaCalor] = useState([]);
   const [porCategoria, setPorCategoria] = useState([]);
+
+  // Comparação de ticket médio entre unidades — controle novo, dedicado só
+  // a essa visualização (não mexe no seletor "Escopo" dos cards/gráficos acima).
+  const [unidadesComparacao, setUnidadesComparacao] = useState([]);
+  const [comparacaoAberta, setComparacaoAberta] = useState(false);
+  const [comparacaoDados, setComparacaoDados] = useState([]);
+  const [comparacaoTaxaDados, setComparacaoTaxaDados] = useState([]);
+  const [comparacaoCarregando, setComparacaoCarregando] = useState(false);
+  const comparacaoRef = useRef(null);
+
+  useEffect(() => {
+    function aoClicarFora(e) {
+      if (comparacaoRef.current && !comparacaoRef.current.contains(e.target)) setComparacaoAberta(false);
+    }
+    document.addEventListener("mousedown", aoClicarFora);
+    return () => document.removeEventListener("mousedown", aoClicarFora);
+  }, []);
 
   const unidadeIdParam = escopo.startsWith("unidade:") ? escopo.slice(8) : null;
   const marcaParam = escopo.startsWith("marca:") ? escopo.slice(6) : null;
@@ -209,19 +289,22 @@ function Conteudo() {
     };
     const paramsContexto = { data_inicio: intervaloContexto.inicio, data_fim_excl: intervaloContexto.fimExcl, ...filtrosComuns };
     const paramsFoco = { data_inicio: intervaloFoco.inicio, data_fim_excl: intervaloFoco.fimExcl, ...filtrosComuns };
+    const paramsFocoOs = { ...paramsFoco, modo_taxa: incluirTaxa ? "incluir" : "excluir" };
 
-    const [resSerie, resHora, resMapa, resCategoria, resFocoSerie, resFocoHora] = await Promise.all([
+    const [resSerie, resHora, resMapa, resCategoria, resFocoHora, resFocoOs] = await Promise.all([
       supabase.rpc("estatisticas_series_diarias", paramsContexto),
       supabase.rpc("estatisticas_por_hora", paramsContexto),
       supabase.rpc("estatisticas_mapa_calor", paramsContexto),
       supabase.rpc("estatisticas_por_categoria", paramsContexto),
-      supabase.rpc("estatisticas_series_diarias", paramsFoco),
       supabase.rpc("estatisticas_por_hora", paramsFoco),
+      supabase.rpc("estatisticas_kpis_os", paramsFocoOs),
     ]);
 
-    const linhasFoco = resFocoSerie.data || [];
-    const registros = linhasFoco.reduce((s, l) => s + Number(l.qtd), 0);
-    const valorTotal = linhasFoco.reduce((s, l) => s + Number(l.valor_total), 0);
+    // Cards (Registros/OS e Ticket médio) contam por OS distinta, não por
+    // lançamento — os 4 gráficos abaixo continuam contando por lançamento.
+    const linhaOs = (resFocoOs.data || [])[0] || { qtd_os: 0, valor_total: 0 };
+    const registros = Number(linhaOs.qtd_os || 0);
+    const valorTotal = Number(linhaOs.valor_total || 0);
 
     const horasFoco = resFocoHora.data || [];
     const horaPico = horasFoco.reduce((max, h) => (!max || Number(h.qtd) > Number(max.qtd) ? h : max), null);
@@ -239,9 +322,35 @@ function Conteudo() {
     setCarregando(false);
   }
 
+  async function carregarComparacao() {
+    if (!permitido || unidadesComparacao.length === 0) {
+      setComparacaoDados([]);
+      setComparacaoTaxaDados([]);
+      return;
+    }
+    setComparacaoCarregando(true);
+    const paramsBase = {
+      data_inicio: intervaloFoco.inicio,
+      data_fim_excl: intervaloFoco.fimExcl,
+      unidade_ids: unidadesComparacao,
+      linha_param: linhaFiltro || null,
+      categoria_param: categoriaFiltro || null,
+    };
+    const chamadas = [supabase.rpc("estatisticas_comparacao_unidades", { ...paramsBase, modo_taxa: incluirTaxa ? "incluir" : "excluir" })];
+    if (incluirTaxa) chamadas.push(supabase.rpc("estatisticas_comparacao_unidades", { ...paramsBase, modo_taxa: "somente" }));
+    const [resGeral, resTaxa] = await Promise.all(chamadas);
+    setComparacaoDados(resGeral.data || []);
+    setComparacaoTaxaDados(incluirTaxa ? resTaxa?.data || [] : []);
+    setComparacaoCarregando(false);
+  }
+
   useEffect(() => {
     carregar();
-  }, [tipoPeriodo, semanaSelecionada, mesSelecionado, dataInicioCustom, dataFimCustom, escopo, linhaFiltro, categoriaFiltro]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [tipoPeriodo, semanaSelecionada, mesSelecionado, dataInicioCustom, dataFimCustom, escopo, linhaFiltro, categoriaFiltro, incluirTaxa]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    carregarComparacao();
+  }, [tipoPeriodo, semanaSelecionada, mesSelecionado, dataInicioCustom, dataFimCustom, linhaFiltro, categoriaFiltro, incluirTaxa, unidadesComparacao]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!permitido) {
     return <p className="text-sm text-muted">Você não tem acesso às Estatísticas do sistema.</p>;
@@ -290,7 +399,21 @@ function Conteudo() {
   });
 
   const rotuloCardRegistros =
-    tipoPeriodo === "diario" ? "Registros hoje" : tipoPeriodo === "semanal" ? "Registros na semana" : tipoPeriodo === "mensal" ? "Registros no mês" : "Registros no período";
+    tipoPeriodo === "diario" ? "OS atendidas hoje" : tipoPeriodo === "semanal" ? "OS atendidas na semana" : tipoPeriodo === "mensal" ? "OS atendidas no mês" : "OS atendidas no período";
+
+  // Unidades disponíveis pro controle de comparação (respeitam as mesmas
+  // unidades que o usuário enxerga na tela toda).
+  const unidadesOrdenadas = [...unidades].sort((a, b) => a.nome.localeCompare(b.nome));
+  function alternarUnidadeComparacao(id) {
+    setUnidadesComparacao((atual) => (atual.includes(id) ? atual.filter((u) => u !== id) : [...atual, id]));
+  }
+  function corDaUnidade(id) {
+    const idx = unidadesComparacao.indexOf(id);
+    return CORES_COMPARACAO[idx % CORES_COMPARACAO.length];
+  }
+  function nomeDaUnidade(id) {
+    return unidades.find((u) => u.id === id)?.nome || "—";
+  }
 
   return (
     <div className="max-w-6xl">
@@ -410,6 +533,19 @@ function Conteudo() {
             ))}
           </select>
         </div>
+
+        <button
+          onClick={() => setIncluirTaxa((v) => !v)}
+          title="Marcado: os totais incluem Taxa de Análise/Visita. Desmarcado: essas taxas ficam de fora dos totais."
+          className={`flex items-center gap-1.5 ml-2 px-3 py-1.5 rounded-full text-xs border transition ${
+            incluirTaxa ? "bg-[#B23B2E]/10 border-[#B23B2E]/40 text-[#B23B2E] font-medium" : "bg-white border-line text-muted hover:border-[#B23B2E]/40"
+          }`}
+        >
+          <span className={`w-3.5 h-3.5 rounded flex items-center justify-center border ${incluirTaxa ? "bg-[#B23B2E] border-[#B23B2E]" : "border-line"}`}>
+            {incluirTaxa && <Check size={10} className="text-white" strokeWidth={3} />}
+          </span>
+          <ReceiptText size={13} /> Taxa de Análise / Taxa de Visita
+        </button>
       </div>
 
       {/* KPIs */}
@@ -564,6 +700,92 @@ function Conteudo() {
               </tbody>
             </table>
           </div>
+        )}
+      </div>
+
+      {/* Comparação de ticket médio entre unidades */}
+      <div className="mt-6">
+        <div className="flex items-center gap-2 mb-3 flex-wrap">
+          <Scale size={14} className="text-muted" />
+          <span className="text-sm font-semibold text-ink mr-1">Comparação entre unidades</span>
+          <span className="text-xs text-muted">usa os filtros de Linha, Categoria e Período acima</span>
+
+          <div className="relative ml-auto" ref={comparacaoRef}>
+            <button
+              onClick={() => setComparacaoAberta((v) => !v)}
+              className="flex items-center gap-2 field-input py-1.5 px-3 text-sm min-w-[220px] justify-between"
+            >
+              <span className="truncate text-left">
+                {unidadesComparacao.length === 0
+                  ? "Selecionar unidades…"
+                  : `${unidadesComparacao.length} unidade${unidadesComparacao.length > 1 ? "s" : ""} selecionada${unidadesComparacao.length > 1 ? "s" : ""}`}
+              </span>
+              <ChevronDown size={14} className={`text-muted shrink-0 transition-transform ${comparacaoAberta ? "rotate-180" : ""}`} />
+            </button>
+            {comparacaoAberta && (
+              <div className="absolute right-0 mt-1 w-72 max-h-80 overflow-y-auto bg-white border border-line rounded-lg shadow-lg z-20 py-1">
+                {unidadesOrdenadas.length === 0 && <p className="text-xs text-muted px-3 py-2">Nenhuma unidade disponível.</p>}
+                {unidadesOrdenadas.map((u) => {
+                  const marcado = unidadesComparacao.includes(u.id);
+                  const cor = marcado ? corDaUnidade(u.id) : null;
+                  return (
+                    <button
+                      key={u.id}
+                      onClick={() => alternarUnidadeComparacao(u.id)}
+                      className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-canvas text-left"
+                    >
+                      <span
+                        className="w-4 h-4 rounded flex items-center justify-center border shrink-0"
+                        style={{ background: marcado ? cor : "transparent", borderColor: marcado ? cor : "#D8DBE2" }}
+                      >
+                        {marcado && <Check size={11} className="text-white" strokeWidth={3} />}
+                      </span>
+                      <span className="truncate text-ink">{u.nome}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+          {unidadesComparacao.length > 0 && (
+            <button onClick={() => setUnidadesComparacao([])} className="flex items-center gap-1 text-xs text-muted hover:text-ink" title="Limpar seleção">
+              <X size={12} /> Limpar
+            </button>
+          )}
+        </div>
+
+        {unidadesComparacao.length === 0 ? (
+          <div className="card p-6 text-center text-sm text-muted mb-6">Selecione 2 ou mais unidades acima para comparar o ticket médio.</div>
+        ) : (
+          <>
+            <TabelaComparacaoUnidades
+              titulo="Ticket médio por unidade"
+              subtitulo={`Qtd. OS, valor vendido e ticket médio no período selecionado (${intervaloFoco.rotuloCard})${incluirTaxa ? ", incluindo taxas" : ", sem taxas"}.`}
+              icone={Scale}
+              corAccent="#2E6B7A"
+              dados={comparacaoDados}
+              unidadeIds={unidadesComparacao}
+              corFn={corDaUnidade}
+              nomeFn={nomeDaUnidade}
+              carregando={comparacaoCarregando}
+              rotuloTicket="Ticket médio"
+            />
+
+            {incluirTaxa && (
+              <TabelaComparacaoUnidades
+                titulo="Ticket médio das taxas por unidade"
+                subtitulo={`Somente lançamentos de Taxa de Análise/Visita, no período selecionado (${intervaloFoco.rotuloCard}).`}
+                icone={ReceiptText}
+                corAccent="#B23B2E"
+                dados={comparacaoTaxaDados}
+                unidadeIds={unidadesComparacao}
+                corFn={corDaUnidade}
+                nomeFn={nomeDaUnidade}
+                carregando={comparacaoCarregando}
+                rotuloTicket="Ticket médio das taxas"
+              />
+            )}
+          </>
         )}
       </div>
     </div>
