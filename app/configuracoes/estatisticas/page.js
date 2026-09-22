@@ -15,6 +15,8 @@ import {
   TrendingUp,
   Tags,
   Grid3x3,
+  DollarSign,
+  Route,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -28,6 +30,7 @@ import {
   CartesianGrid,
   Tooltip,
   Legend,
+  ReferenceLine,
 } from "recharts";
 import AppShell from "../../../components/AppShell";
 import BotaoAtualizar from "../../../components/BotaoAtualizar";
@@ -35,17 +38,22 @@ import { supabase } from "../../../lib/supabaseClient";
 import { useSessao } from "../../../lib/SessaoContext";
 import { podeVerEstatisticas } from "../../../lib/permissions";
 import { formatarMoedaSemSimbolo } from "../../../lib/formato";
-import { hojeBrasil } from "../../../lib/fusoHorario";
+import { hojeBrasil, listaSemanasRecentes, listaMesesRecentes } from "../../../lib/fusoHorario";
 
 const NOMES_DIA = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
 const NOMES_DIA_CURTO = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 
 const TIPOS_PERIODO = [
-  { id: "diario", rotulo: "Diário", icone: CalendarDays, descricao: "Últimos 30 dias, dia a dia" },
-  { id: "semanal", rotulo: "Semanal", icone: CalendarRange, descricao: "Últimas 12 semanas" },
-  { id: "mensal", rotulo: "Mensal", icone: CalendarClock, descricao: "Últimos 12 meses" },
+  { id: "diario", rotulo: "Diário", icone: CalendarDays, descricao: "Hoje, com os últimos 30 dias de contexto" },
+  { id: "semanal", rotulo: "Semanal", icone: CalendarRange, descricao: "Escolha a semana (domingo a sábado)" },
+  { id: "mensal", rotulo: "Mensal", icone: CalendarClock, descricao: "Escolha o mês" },
   { id: "personalizado", rotulo: "Personalizado", icone: SlidersHorizontal, descricao: "Escolha o período" },
 ];
+
+// Janelas de contexto dos gráficos — cobrem o mesmo alcance dos seletores
+// (16 semanas / 18 meses), pra semana/mês escolhido sempre aparecer destacado.
+const QTD_SEMANAS = 16;
+const QTD_MESES = 18;
 
 function diaSeguinte(dataIso) {
   const d = new Date(dataIso + "T12:00:00");
@@ -63,10 +71,6 @@ function inicioDaSemanaDe(dataIso) {
   const d = new Date(dataIso + "T12:00:00");
   d.setDate(d.getDate() - d.getDay());
   return d.toISOString().slice(0, 10);
-}
-
-function inicioMesAtual() {
-  return hojeBrasil().slice(0, 7) + "-01";
 }
 
 function dataInicioMesesAtras(meses) {
@@ -90,17 +94,31 @@ function formatarMesCurto(chaveMes) {
   return `${mes}/${ano}`;
 }
 
+// TV e DTV contam juntas nesta tela, sob o rótulo "DTV" — só aqui em
+// Estatísticas; Lançamentos, Consulta, Pareto etc. continuam separados.
+function categoriaEfetiva(nome) {
+  return nome === "TV" || nome === "DTV" ? "DTV" : nome;
+}
+
 function Conteudo() {
   const { usuario, unidades, marcasDisponiveis } = useSessao();
   const permitido = podeVerEstatisticas(usuario.cargo);
 
+  const semanas = listaSemanasRecentes(QTD_SEMANAS);
+  const meses = listaMesesRecentes(QTD_MESES);
+
   const [tipoPeriodo, setTipoPeriodo] = useState("diario"); // "diario" | "semanal" | "mensal" | "personalizado"
+  const [semanaSelecionada, setSemanaSelecionada] = useState(semanas[0].valor);
+  const [mesSelecionado, setMesSelecionado] = useState(meses[0].valor);
   const [dataInicioCustom, setDataInicioCustom] = useState(somarDias(hojeBrasil(), -30));
   const [dataFimCustom, setDataFimCustom] = useState(hojeBrasil());
   const [escopo, setEscopo] = useState("todas"); // "todas" | "marca:X" | "unidade:<id>"
+  const [linhaFiltro, setLinhaFiltro] = useState(""); // "" | "ci" | "ih"
+  const [categoriaFiltro, setCategoriaFiltro] = useState(""); // "" | nome efetivo da categoria
+  const [categoriasDisponiveis, setCategoriasDisponiveis] = useState([]);
   const [carregando, setCarregando] = useState(true);
 
-  const [kpis, setKpis] = useState({ hoje: 0, semana: 0, mes: 0, ticketMedio: 0, totalPeriodo: 0 });
+  const [kpis, setKpis] = useState({ registros: 0, valorTotal: 0, ticketMedio: 0, horaPico: null });
   const [serieDiaria, setSerieDiaria] = useState([]);
   const [porHora, setPorHora] = useState([]);
   const [mapaCalor, setMapaCalor] = useState([]);
@@ -109,7 +127,16 @@ function Conteudo() {
   const unidadeIdParam = escopo.startsWith("unidade:") ? escopo.slice(8) : null;
   const marcaParam = escopo.startsWith("marca:") ? escopo.slice(6) : null;
 
-  function calcularIntervalo() {
+  useEffect(() => {
+    supabase.from("categorias").select("nome").order("nome").then(({ data }) => {
+      const efetivos = [...new Set((data || []).map((c) => categoriaEfetiva(c.nome)))].sort((a, b) => a.localeCompare(b));
+      setCategoriasDisponiveis(efetivos);
+    });
+  }, []);
+
+  // Janela ampla, usada pelos gráficos — dá contexto histórico independente
+  // de qual semana/mês específico foi escolhido.
+  function calcularIntervaloContexto() {
     const hoje = hojeBrasil();
     if (tipoPeriodo === "personalizado") {
       const inicio = dataInicioCustom;
@@ -119,55 +146,93 @@ function Conteudo() {
       return { inicio, fimExcl, granularidade };
     }
     if (tipoPeriodo === "semanal") {
-      return { inicio: somarDias(hoje, -7 * 11), fimExcl: diaSeguinte(hoje), granularidade: "semana" };
+      return { inicio: somarDias(hoje, -7 * (QTD_SEMANAS - 1)), fimExcl: diaSeguinte(hoje), granularidade: "semana" };
     }
     if (tipoPeriodo === "mensal") {
-      return { inicio: dataInicioMesesAtras(12), fimExcl: diaSeguinte(hoje), granularidade: "mes" };
+      return { inicio: dataInicioMesesAtras(QTD_MESES), fimExcl: diaSeguinte(hoje), granularidade: "mes" };
     }
     // diario
     return { inicio: somarDias(hoje, -29), fimExcl: diaSeguinte(hoje), granularidade: "dia" };
   }
 
-  const intervalo = calcularIntervalo();
+  // Janela exata do período escolhido — é o que os cards (KPIs) mostram.
+  function calcularIntervaloFoco() {
+    const hoje = hojeBrasil();
+    if (tipoPeriodo === "personalizado") {
+      return {
+        inicio: dataInicioCustom,
+        fimExcl: diaSeguinte(dataFimCustom),
+        rotuloCard: `${formatarDataCurta(dataInicioCustom)} a ${formatarDataCurta(dataFimCustom)}`,
+        rotuloDestaque: null, // período custom já É o contexto inteiro — nada a destacar
+      };
+    }
+    if (tipoPeriodo === "semanal") {
+      const semana = semanas.find((s) => s.valor === semanaSelecionada) || semanas[0];
+      return {
+        inicio: semana.inicio,
+        fimExcl: diaSeguinte(semana.fim),
+        rotuloCard: semana.rotulo,
+        rotuloDestaque: formatarDataCurta(semana.inicio),
+      };
+    }
+    if (tipoPeriodo === "mensal") {
+      const mes = meses.find((m) => m.valor === mesSelecionado) || meses[0];
+      return {
+        inicio: mes.inicio,
+        fimExcl: mes.fimExclusivo,
+        rotuloCard: mes.rotulo,
+        rotuloDestaque: formatarMesCurto(mes.valor),
+      };
+    }
+    // diario — sempre hoje (não tem seletor de dia; pra um dia específico do
+    // passado, use o filtro Personalizado com a mesma data em "De" e "Até")
+    return {
+      inicio: hoje,
+      fimExcl: diaSeguinte(hoje),
+      rotuloCard: formatarDataCurta(hoje),
+      rotuloDestaque: formatarDataCurta(hoje),
+    };
+  }
+
+  const intervaloContexto = calcularIntervaloContexto();
+  const intervaloFoco = calcularIntervaloFoco();
 
   async function carregar() {
     if (!permitido) return;
     setCarregando(true);
-    const { inicio: dataInicioAmplo, fimExcl: dataFimExcl } = calcularIntervalo();
-    const params = (dataInicio) => ({
-      data_inicio: dataInicio,
-      data_fim_excl: dataFimExcl,
+
+    const filtrosComuns = {
       unidade_id_param: unidadeIdParam,
       marca_param: marcaParam,
-    });
+      linha_param: linhaFiltro || null,
+      categoria_param: categoriaFiltro || null,
+    };
+    const paramsContexto = { data_inicio: intervaloContexto.inicio, data_fim_excl: intervaloContexto.fimExcl, ...filtrosComuns };
+    const paramsFoco = { data_inicio: intervaloFoco.inicio, data_fim_excl: intervaloFoco.fimExcl, ...filtrosComuns };
 
-    const [resKpi, resSerie, resHora, resMapa, resCategoria] = await Promise.all([
-      supabase.rpc("estatisticas_series_diarias", params(inicioMesAtual())),
-      supabase.rpc("estatisticas_series_diarias", params(dataInicioAmplo)),
-      supabase.rpc("estatisticas_por_hora", params(dataInicioAmplo)),
-      supabase.rpc("estatisticas_mapa_calor", params(dataInicioAmplo)),
-      supabase.rpc("estatisticas_por_categoria", params(dataInicioAmplo)),
+    const [resSerie, resHora, resMapa, resCategoria, resFocoSerie, resFocoHora] = await Promise.all([
+      supabase.rpc("estatisticas_series_diarias", paramsContexto),
+      supabase.rpc("estatisticas_por_hora", paramsContexto),
+      supabase.rpc("estatisticas_mapa_calor", paramsContexto),
+      supabase.rpc("estatisticas_por_categoria", paramsContexto),
+      supabase.rpc("estatisticas_series_diarias", paramsFoco),
+      supabase.rpc("estatisticas_por_hora", paramsFoco),
     ]);
 
-    const linhasKpi = resKpi.data || [];
-    const hoje = hojeBrasil();
-    const inicioSemana = somarDias(hoje, -6);
-    const kpiHoje = linhasKpi.filter((l) => l.dia === hoje).reduce((s, l) => s + Number(l.qtd), 0);
-    const kpiSemana = linhasKpi.filter((l) => l.dia >= inicioSemana && l.dia <= hoje).reduce((s, l) => s + Number(l.qtd), 0);
-    const kpiMes = linhasKpi.reduce((s, l) => s + Number(l.qtd), 0);
+    const linhasFoco = resFocoSerie.data || [];
+    const registros = linhasFoco.reduce((s, l) => s + Number(l.qtd), 0);
+    const valorTotal = linhasFoco.reduce((s, l) => s + Number(l.valor_total), 0);
 
-    const serieAmpla = resSerie.data || [];
-    const totalPeriodo = serieAmpla.reduce((s, l) => s + Number(l.qtd), 0);
-    const valorPeriodo = serieAmpla.reduce((s, l) => s + Number(l.valor_total), 0);
+    const horasFoco = resFocoHora.data || [];
+    const horaPico = horasFoco.reduce((max, h) => (!max || Number(h.qtd) > Number(max.qtd) ? h : max), null);
 
     setKpis({
-      hoje: kpiHoje,
-      semana: kpiSemana,
-      mes: kpiMes,
-      ticketMedio: totalPeriodo > 0 ? valorPeriodo / totalPeriodo : 0,
-      totalPeriodo,
+      registros,
+      valorTotal,
+      ticketMedio: registros > 0 ? valorTotal / registros : 0,
+      horaPico,
     });
-    setSerieDiaria(serieAmpla);
+    setSerieDiaria(resSerie.data || []);
     setPorHora(resHora.data || []);
     setMapaCalor(resMapa.data || []);
     setPorCategoria((resCategoria.data || []).slice(0, 10));
@@ -176,14 +241,14 @@ function Conteudo() {
 
   useEffect(() => {
     carregar();
-  }, [tipoPeriodo, dataInicioCustom, dataFimCustom, escopo]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [tipoPeriodo, semanaSelecionada, mesSelecionado, dataInicioCustom, dataFimCustom, escopo, linhaFiltro, categoriaFiltro]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!permitido) {
     return <p className="text-sm text-muted">Você não tem acesso às Estatísticas do sistema.</p>;
   }
 
   // --- CI vs IH ao longo do tempo (granularidade conforme o período escolhido) ---
-  const { granularidade } = intervalo;
+  const { granularidade } = intervaloContexto;
   const chaveBucket = (dia) => (granularidade === "mes" ? dia.slice(0, 7) : granularidade === "semana" ? inicioDaSemanaDe(dia) : dia);
   const rotuloBucket = (chave) => (granularidade === "mes" ? formatarMesCurto(chave) : formatarDataCurta(chave));
 
@@ -197,14 +262,14 @@ function Conteudo() {
   const dadosTendencia = [...buckets.entries()]
     .sort(([a], [b]) => (a < b ? -1 : 1))
     .map(([chave, v]) => ({ rotulo: rotuloBucket(chave), CI: v.CI, IH: v.IH }));
-  const temIH = dadosTendencia.some((d) => d.IH > 0);
+  const mostrarCI = linhaFiltro !== "ih";
+  const mostrarIH = linhaFiltro !== "ci" && dadosTendencia.some((d) => d.IH > 0 || linhaFiltro === "ih");
 
-  // --- Volume por horário (00h–23h, ordem cronológica) ---
+  // --- Volume por horário (00h–23h, ordem cronológica) — contexto amplo ---
   const horasCompletas = Array.from({ length: 24 }, (_, h) => {
     const encontrado = porHora.find((p) => p.hora === h);
     return { hora: h, qtd: encontrado ? Number(encontrado.qtd) : 0 };
   });
-  const horaPico = horasCompletas.reduce((max, h) => (h.qtd > max.qtd ? h : max), horasCompletas[0]);
   const totalHoras = horasCompletas.reduce((s, h) => s + h.qtd, 0);
   let acumulado = 0;
   const dadosPareto = horasCompletas.map((h) => {
@@ -223,6 +288,9 @@ function Conteudo() {
     mapaValores.set(`${c.dia_semana}-${c.hora}`, Number(c.qtd));
     if (Number(c.qtd) > maxMapa) maxMapa = Number(c.qtd);
   });
+
+  const rotuloCardRegistros =
+    tipoPeriodo === "diario" ? "Registros hoje" : tipoPeriodo === "semanal" ? "Registros na semana" : tipoPeriodo === "mensal" ? "Registros no mês" : "Registros no período";
 
   return (
     <div className="max-w-6xl">
@@ -275,8 +343,28 @@ function Conteudo() {
         })}
       </div>
 
+      {tipoPeriodo === "semanal" && (
+        <div className="flex items-center gap-2 mb-4 text-sm">
+          <label className="text-xs text-muted">Semana</label>
+          <select className="field-input py-1.5 w-64" value={semanaSelecionada} onChange={(e) => setSemanaSelecionada(e.target.value)}>
+            {semanas.map((s) => (
+              <option key={s.valor} value={s.valor}>{s.rotulo}</option>
+            ))}
+          </select>
+        </div>
+      )}
+      {tipoPeriodo === "mensal" && (
+        <div className="flex items-center gap-2 mb-4 text-sm">
+          <label className="text-xs text-muted">Mês</label>
+          <select className="field-input py-1.5 w-40" value={mesSelecionado} onChange={(e) => setMesSelecionado(e.target.value)}>
+            {meses.map((m) => (
+              <option key={m.valor} value={m.valor}>{m.rotulo}</option>
+            ))}
+          </select>
+        </div>
+      )}
       {tipoPeriodo === "personalizado" && (
-        <div className="flex items-center gap-2 mb-6 text-sm">
+        <div className="flex items-center gap-2 mb-4 text-sm">
           <label className="text-xs text-muted">De</label>
           <input
             type="date"
@@ -296,32 +384,52 @@ function Conteudo() {
           />
         </div>
       )}
-      {tipoPeriodo !== "personalizado" && <div className="mb-6" />}
+      {tipoPeriodo === "diario" && <div className="mb-4" />}
+
+      <div className="flex items-center gap-2 mb-6 flex-wrap">
+        <Route size={14} className="text-muted" />
+        <span className="text-xs text-muted mr-1">Linha:</span>
+        <div className="flex items-center gap-1 bg-canvas rounded-full p-0.5 border border-line">
+          {[{ id: "", rotulo: "Todas" }, { id: "ci", rotulo: "CI" }, { id: "ih", rotulo: "IH" }].map((op) => (
+            <button
+              key={op.id || "todas"}
+              onClick={() => setLinhaFiltro(op.id)}
+              className={`px-3 py-1 rounded-full text-xs transition ${linhaFiltro === op.id ? "bg-white shadow-sm font-medium text-ink" : "text-muted"}`}
+            >
+              {op.rotulo}
+            </button>
+          ))}
+        </div>
+
+        <div className="relative ml-2">
+          <Tags size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none z-10" />
+          <select className="field-input pl-8 py-1.5 text-sm w-52" value={categoriaFiltro} onChange={(e) => setCategoriaFiltro(e.target.value)}>
+            <option value="">Todas as categorias</option>
+            {categoriasDisponiveis.map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
+        </div>
+      </div>
 
       {/* KPIs */}
-      <div className="grid grid-cols-5 gap-3 mb-6">
+      <div className="grid grid-cols-4 gap-3 mb-6">
         <div className="card overflow-hidden">
           <div className="h-1.5 bg-[#2670B5]" />
           <div className="p-4">
             <div className="w-8 h-8 rounded-lg bg-[#2670B5]/10 flex items-center justify-center text-[#2670B5] mb-2"><Hash size={16} /></div>
-            <p className="text-xs text-muted mb-1">Registros hoje</p>
-            <p className="font-mono-num text-xl font-semibold text-ink">{carregando ? "…" : kpis.hoje}</p>
+            <p className="text-xs text-muted mb-1">{rotuloCardRegistros}</p>
+            <p className="font-mono-num text-xl font-semibold text-ink">{carregando ? "…" : kpis.registros}</p>
+            <p className="text-[11px] text-muted mt-0.5 truncate">{intervaloFoco.rotuloCard}</p>
           </div>
         </div>
         <div className="card overflow-hidden">
           <div className="h-1.5 bg-[#3F8A5C]" />
           <div className="p-4">
-            <div className="w-8 h-8 rounded-lg bg-[#3F8A5C]/10 flex items-center justify-center text-[#3F8A5C] mb-2"><TrendingUp size={16} /></div>
-            <p className="text-xs text-muted mb-1">Registros na semana</p>
-            <p className="font-mono-num text-xl font-semibold text-ink">{carregando ? "…" : kpis.semana}</p>
-          </div>
-        </div>
-        <div className="card overflow-hidden">
-          <div className="h-1.5 bg-[#9C5A34]" />
-          <div className="p-4">
-            <div className="w-8 h-8 rounded-lg bg-[#9C5A34]/10 flex items-center justify-center text-[#9C5A34] mb-2"><Calendar size={16} /></div>
-            <p className="text-xs text-muted mb-1">Registros no mês</p>
-            <p className="font-mono-num text-xl font-semibold text-ink">{carregando ? "…" : kpis.mes}</p>
+            <div className="w-8 h-8 rounded-lg bg-[#3F8A5C]/10 flex items-center justify-center text-[#3F8A5C] mb-2"><DollarSign size={16} /></div>
+            <p className="text-xs text-muted mb-1">Valor total vendido</p>
+            <p className="font-mono-num text-xl font-semibold text-ink">{carregando ? "…" : `R$ ${formatarMoedaSemSimbolo(kpis.valorTotal)}`}</p>
+            <p className="text-[11px] text-muted mt-0.5 truncate">{intervaloFoco.rotuloCard}</p>
           </div>
         </div>
         <div className="card overflow-hidden">
@@ -330,6 +438,7 @@ function Conteudo() {
             <div className="w-8 h-8 rounded-lg bg-[#C9A227]/10 flex items-center justify-center text-[#9C7E13] mb-2"><Percent size={16} /></div>
             <p className="text-xs text-muted mb-1">Ticket médio</p>
             <p className="font-mono-num text-xl font-semibold text-ink">{carregando ? "…" : `R$ ${formatarMoedaSemSimbolo(kpis.ticketMedio)}`}</p>
+            <p className="text-[11px] text-muted mt-0.5 truncate">{intervaloFoco.rotuloCard}</p>
           </div>
         </div>
         <div className="card overflow-hidden">
@@ -338,8 +447,9 @@ function Conteudo() {
             <div className="w-8 h-8 rounded-lg bg-[#7C56B5]/10 flex items-center justify-center text-[#7C56B5] mb-2"><Flame size={16} /></div>
             <p className="text-xs text-muted mb-1">Horário de pico</p>
             <p className="font-mono-num text-xl font-semibold text-ink">
-              {carregando || totalHoras === 0 ? "—" : `${String(horaPico.hora).padStart(2, "0")}h`}
+              {carregando || !kpis.horaPico ? "—" : `${String(kpis.horaPico.hora).padStart(2, "0")}h`}
             </p>
+            <p className="text-[11px] text-muted mt-0.5 truncate">{intervaloFoco.rotuloCard}</p>
           </div>
         </div>
       </div>
@@ -347,10 +457,11 @@ function Conteudo() {
       {/* CI vs IH ao longo do tempo */}
       <div className="card p-5 mb-6">
         <p className="text-sm font-semibold text-ink mb-1 flex items-center gap-1.5">
-          <TrendingUp size={14} /> Registros ao longo do tempo{temIH ? " — CI vs IH" : ""}
+          <TrendingUp size={14} /> Registros ao longo do tempo{mostrarCI && mostrarIH ? " — CI vs IH" : ""}
         </p>
         <p className="text-xs text-muted mb-4">
-          Agrupado por {granularidade === "mes" ? "mês" : granularidade === "semana" ? "semana" : "dia"} · {formatarDataCurta(intervalo.inicio)} até {formatarDataCurta(hojeBrasil())}.
+          Agrupado por {granularidade === "mes" ? "mês" : granularidade === "semana" ? "semana" : "dia"} · {formatarDataCurta(intervaloContexto.inicio)} até {formatarDataCurta(hojeBrasil())}
+          {intervaloFoco.rotuloDestaque ? " · período selecionado destacado em vermelho" : ""}.
         </p>
         {carregando ? (
           <p className="text-sm text-muted py-16 text-center">Carregando…</p>
@@ -362,8 +473,11 @@ function Conteudo() {
               <YAxis tick={{ fontSize: 11, fill: "#6B6D76" }} width={36} allowDecimals={false} />
               <Tooltip />
               <Legend wrapperStyle={{ fontSize: 12 }} />
-              <Line type="monotone" dataKey="CI" stroke="#2670B5" strokeWidth={2} dot={{ r: 2.5 }} />
-              {temIH && <Line type="monotone" dataKey="IH" stroke="#0E7A72" strokeWidth={2} dot={{ r: 2.5 }} />}
+              {intervaloFoco.rotuloDestaque && (
+                <ReferenceLine x={intervaloFoco.rotuloDestaque} stroke="#B23B2E" strokeDasharray="4 3" ifOverflow="discard" />
+              )}
+              {mostrarCI && <Line type="monotone" dataKey="CI" stroke="#2670B5" strokeWidth={2} dot={{ r: 2.5 }} />}
+              {mostrarIH && <Line type="monotone" dataKey="IH" stroke="#0E7A72" strokeWidth={2} dot={{ r: 2.5 }} />}
             </LineChart>
           </ResponsiveContainer>
         )}
@@ -373,7 +487,7 @@ function Conteudo() {
         {/* Pareto por horário */}
         <div className="card p-5">
           <p className="text-sm font-semibold text-ink mb-1 flex items-center gap-1.5"><Clock size={14} /> Volume por horário do dia</p>
-          <p className="text-xs text-muted mb-4">Das 00h às 23h, com o acumulado do dia em %.</p>
+          <p className="text-xs text-muted mb-4">Das 00h às 23h, com o acumulado do dia em % — mesmo contexto do gráfico acima.</p>
           {carregando ? (
             <p className="text-sm text-muted py-16 text-center">Carregando…</p>
           ) : (
@@ -394,7 +508,7 @@ function Conteudo() {
         {/* Distribuição por categoria */}
         <div className="card p-5">
           <p className="text-sm font-semibold text-ink mb-1 flex items-center gap-1.5"><Tags size={14} /> Distribuição por categoria</p>
-          <p className="text-xs text-muted mb-4">Top 10 categorias por quantidade de registros.</p>
+          <p className="text-xs text-muted mb-4">Top 10 categorias por quantidade de registros (TV e DTV somadas em "DTV").</p>
           {carregando ? (
             <p className="text-sm text-muted py-16 text-center">Carregando…</p>
           ) : (
