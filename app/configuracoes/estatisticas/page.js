@@ -22,6 +22,7 @@ import {
   Check,
   ChevronDown,
   X,
+  ClipboardList,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -39,10 +40,11 @@ import {
 } from "recharts";
 import AppShell from "../../../components/AppShell";
 import BotaoAtualizar from "../../../components/BotaoAtualizar";
+import Modal from "../../../components/Modal";
 import { supabase } from "../../../lib/supabaseClient";
 import { useSessao } from "../../../lib/SessaoContext";
 import { podeVerEstatisticas } from "../../../lib/permissions";
-import { formatarMoedaSemSimbolo } from "../../../lib/formato";
+import { formatarMoedaSemSimbolo, formatarDataBR } from "../../../lib/formato";
 import { hojeBrasil, listaSemanasRecentes, listaMesesRecentes } from "../../../lib/fusoHorario";
 
 const NOMES_DIA = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
@@ -109,7 +111,7 @@ function categoriaEfetiva(nome) {
 // mantém a mesma cor nas duas tabelas de comparação (geral e de taxas).
 const CORES_COMPARACAO = ["#2670B5", "#0E7A72", "#B8862E", "#7C56B5", "#B23B2E", "#2E7D5B", "#9C6B14", "#4A6FA5"];
 
-function TabelaComparacaoUnidades({ titulo, subtitulo, icone: Icone, corAccent, dados, unidadeIds, corFn, nomeFn, carregando, rotuloTicket }) {
+function TabelaComparacaoUnidades({ titulo, subtitulo, icone: Icone, corAccent, dados, unidadeIds, corFn, nomeFn, carregando, rotuloTicket, aoClicarUnidade }) {
   const linhas = unidadeIds
     .map((id) => dados.find((d) => d.unidade_id === id) || { unidade_id: id, qtd_os: 0, valor_total: 0 })
     .map((d) => ({ ...d, ticket_medio: Number(d.qtd_os) > 0 ? Number(d.valor_total) / Number(d.qtd_os) : 0 }));
@@ -129,10 +131,17 @@ function TabelaComparacaoUnidades({ titulo, subtitulo, icone: Icone, corAccent, 
             const cor = corFn(l.unidade_id);
             const pct = Math.max(4, Math.round((l.ticket_medio / maxTicket) * 100));
             return (
-              <div key={l.unidade_id} className="rounded-xl border border-line overflow-hidden">
+              <div
+                key={l.unidade_id}
+                onClick={() => aoClicarUnidade && aoClicarUnidade(l.unidade_id)}
+                title="Clique para ver os lançamentos que compõem esses valores"
+                className={`rounded-xl border border-line overflow-hidden transition ${aoClicarUnidade ? "cursor-pointer hover:border-[color:var(--cor-hover)] hover:shadow-sm" : ""}`}
+                style={{ "--cor-hover": cor }}
+              >
                 <div className="flex items-center gap-2 px-4 py-2" style={{ background: `${cor}12` }}>
                   <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: cor }} />
                   <span className="text-sm font-semibold text-ink truncate">{nomeFn(l.unidade_id)}</span>
+                  {aoClicarUnidade && <ClipboardList size={13} className="text-muted ml-auto shrink-0" />}
                 </div>
                 <div className="grid grid-cols-3 gap-3 px-4 py-3">
                   <div>
@@ -195,6 +204,12 @@ function Conteudo() {
   const [comparacaoTaxaDados, setComparacaoTaxaDados] = useState([]);
   const [comparacaoCarregando, setComparacaoCarregando] = useState(false);
   const comparacaoRef = useRef(null);
+
+  // Popup de detalhe — lançamentos que compõem os valores de uma unidade
+  // clicada na comparação (geral ou de taxas).
+  const [detalheUnidade, setDetalheUnidade] = useState(null); // { unidadeId, nome, cor, modoTaxa } | null
+  const [lancamentosDetalhe, setLancamentosDetalhe] = useState([]);
+  const [carregandoDetalhe, setCarregandoDetalhe] = useState(false);
 
   useEffect(() => {
     function aoClicarFora(e) {
@@ -351,6 +366,36 @@ function Conteudo() {
   useEffect(() => {
     carregarComparacao();
   }, [tipoPeriodo, semanaSelecionada, mesSelecionado, dataInicioCustom, dataFimCustom, linhaFiltro, categoriaFiltro, incluirTaxa, unidadesComparacao]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Abre o popup com os lançamentos que compõem os valores de uma unidade
+  // clicada na comparação — respeita os mesmos filtros (Linha/Categoria/
+  // Período) e o modo de taxa da tabela em que o clique aconteceu.
+  async function abrirDetalheUnidade(unidadeId, nome, cor, modoTaxa) {
+    setDetalheUnidade({ unidadeId, nome, cor, modoTaxa });
+    setCarregandoDetalhe(true);
+    let query = supabase
+      .from("lancamentos")
+      .select("id, data, numero_os, valor_pago, categorias(nome), tipos_servico(nome)")
+      .eq("unidade_id", unidadeId)
+      .gte("data", intervaloFoco.inicio)
+      .lt("data", intervaloFoco.fimExcl)
+      .order("numero_os", { ascending: true })
+      .order("data", { ascending: false });
+    if (linhaFiltro) query = query.eq("linha", linhaFiltro);
+
+    const { data } = await query;
+    let linhas = data || [];
+    if (categoriaFiltro) linhas = linhas.filter((l) => categoriaEfetiva(l.categorias?.nome) === categoriaFiltro);
+    linhas = linhas.filter((l) => {
+      const ehTaxa = /taxa/i.test(l.tipos_servico?.nome || "");
+      if (modoTaxa === "somente") return ehTaxa;
+      if (modoTaxa === "incluir") return true;
+      return !ehTaxa; // "excluir"
+    });
+
+    setLancamentosDetalhe(linhas);
+    setCarregandoDetalhe(false);
+  }
 
   if (!permitido) {
     return <p className="text-sm text-muted">Você não tem acesso às Estatísticas do sistema.</p>;
@@ -769,6 +814,7 @@ function Conteudo() {
               nomeFn={nomeDaUnidade}
               carregando={comparacaoCarregando}
               rotuloTicket="Ticket médio"
+              aoClicarUnidade={(id) => abrirDetalheUnidade(id, nomeDaUnidade(id), corDaUnidade(id), incluirTaxa ? "incluir" : "excluir")}
             />
 
             {incluirTaxa && (
@@ -783,11 +829,63 @@ function Conteudo() {
                 nomeFn={nomeDaUnidade}
                 carregando={comparacaoCarregando}
                 rotuloTicket="Ticket médio das taxas"
+                aoClicarUnidade={(id) => abrirDetalheUnidade(id, nomeDaUnidade(id), corDaUnidade(id), "somente")}
               />
             )}
           </>
         )}
       </div>
+
+      {detalheUnidade && (() => {
+        const qtdOs = new Set(lancamentosDetalhe.map((l) => l.numero_os)).size;
+        const valorTotalDetalhe = lancamentosDetalhe.reduce((s, l) => s + Number(l.valor_pago), 0);
+        const ticketMedioDetalhe = qtdOs > 0 ? valorTotalDetalhe / qtdOs : 0;
+        let ultimaOs = null;
+        return (
+          <Modal
+            titulo={detalheUnidade.nome}
+            subtitulo={`${qtdOs} OS · R$ ${formatarMoedaSemSimbolo(valorTotalDetalhe)} · ticket médio R$ ${formatarMoedaSemSimbolo(ticketMedioDetalhe)} — ${intervaloFoco.rotuloCard}${
+              detalheUnidade.modoTaxa === "somente" ? " · só taxas" : detalheUnidade.modoTaxa === "excluir" ? " · sem taxas" : ""
+            }`}
+            onFechar={() => setDetalheUnidade(null)}
+            largura="max-w-3xl"
+          >
+            {carregandoDetalhe ? (
+              <p className="text-sm text-muted py-6 text-center">Carregando…</p>
+            ) : (
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-xs uppercase tracking-wider text-muted border-b border-line">
+                    <td className="pb-2">OS</td>
+                    <td className="pb-2">Data</td>
+                    <td className="pb-2">Categoria</td>
+                    <td className="pb-2">Tipo de serviço</td>
+                    <td className="pb-2 text-right">Valor pago</td>
+                  </tr>
+                </thead>
+                <tbody>
+                  {lancamentosDetalhe.map((l) => {
+                    const novaOs = l.numero_os !== ultimaOs;
+                    ultimaOs = l.numero_os;
+                    return (
+                      <tr key={l.id} className={`border-t border-line ${novaOs ? "" : "text-muted"}`}>
+                        <td className="py-2 font-mono-num">{novaOs ? l.numero_os : ""}</td>
+                        <td className="py-2">{formatarDataBR(l.data)}</td>
+                        <td className="py-2">{l.categorias?.nome || "—"}</td>
+                        <td className="py-2">{l.tipos_servico?.nome}</td>
+                        <td className="py-2 text-right font-mono-num font-medium">R$ {formatarMoedaSemSimbolo(l.valor_pago)}</td>
+                      </tr>
+                    );
+                  })}
+                  {lancamentosDetalhe.length === 0 && (
+                    <tr><td colSpan={5} className="py-4 text-muted text-center">Nenhum lançamento nesse período.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            )}
+          </Modal>
+        );
+      })()}
     </div>
   );
 }
