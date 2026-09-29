@@ -417,7 +417,22 @@ function Conteudo() {
       const nb = parseInt(String(b.numero_os).replace(/\D/g, ""), 10) || 0;
       return ordemOs === "asc" ? na - nb : nb - na;
     });
+  } else if (apenasDuplicados) {
+    // Na visão "Nº OS repetidos" (sem ordenação manual da coluna), agrupa os
+    // lançamentos da mesma OS lado a lado — assim os pagamentos parciais de
+    // uma OS ficam juntos na tela, em vez de espalhados pela data.
+    const grupos = new Map();
+    resultadosExibidos.forEach((r) => {
+      if (!grupos.has(r.numero_os)) grupos.set(r.numero_os, []);
+      grupos.get(r.numero_os).push(r);
+    });
+    resultadosExibidos = [...grupos.values()].flat();
   }
+  // Controla, durante a renderização da tabela, quais combinações de
+  // OS+tipo de serviço já tiveram o orçamento exibido — a partir da 2ª
+  // ocorrência (em qualquer posição da lista, não só linhas vizinhas) o
+  // valor fica oculto. Recriado a cada render, junto com resultadosExibidos.
+  const orcamentosJaMostrados = new Set();
 
   return (
     <div className="max-w-5xl">
@@ -543,6 +558,15 @@ function Conteudo() {
                   {resultadosExibidos.map((r) => {
                     const Icone = iconeCategoria(r.categorias?.nome);
                     const duplicado = contagemOs[r.numero_os] > 1;
+                    // Uma OS pode ter vários lançamentos (pagamentos parciais) — o
+                    // orçamento é o mesmo em todos eles, então mostrar o valor
+                    // repetido em cada linha dá impressão de duplicidade. Aqui a
+                    // 1ª ocorrência de cada OS+tipo de serviço nesta lista mostra o
+                    // orçamento normalmente; nas seguintes (não precisa estar do
+                    // lado, pode estar em qualquer lugar da lista) ele fica oculto.
+                    const chaveGrupo = `${r.unidade_id}::${r.numero_os}::${r.tipo_servico_id}::${r.linha}`;
+                    const jaMostrouOrcamento = orcamentosJaMostrados.has(chaveGrupo);
+                    if (!jaMostrouOrcamento) orcamentosJaMostrados.add(chaveGrupo);
                     const classeLinha = duplicado
                       ? "border-t border-line cursor-pointer bg-[#FFF3B0]/60 hover:bg-[#FFF3B0]"
                       : "border-t border-line cursor-pointer hover:bg-canvas/60";
@@ -550,7 +574,10 @@ function Conteudo() {
                       <tr key={r.id} className={classeLinha} onClick={() => abrirDetalhe(r)}>
                         <td className="p-3">{formatarDataBR(r.data)}</td>
                         {mostrarUnidade && <td className="p-3">{r.unidades?.nome}</td>}
-                        <td className="p-3 font-mono-num">{r.numero_os}</td>
+                        <td className="p-3 font-mono-num">
+                          {jaMostrouOrcamento && <span className="text-muted mr-1" title="Já existe outro lançamento dessa mesma OS">↳</span>}
+                          {r.numero_os}
+                        </td>
                         <td className="p-3">
                           <span className="inline-flex items-center gap-1.5">
                             <Icone size={13} className="text-muted" />
@@ -565,7 +592,15 @@ function Conteudo() {
                     </span>
                   )}
                         </td>
-                        <td className="p-3 text-right font-mono-num">R$ {formatarMoedaSemSimbolo(r.orcamento_aprovado)}</td>
+                        <td className="p-3 text-right font-mono-num">
+                          {jaMostrouOrcamento ? (
+                            <span className="text-muted text-xs italic" title={`Mesmo orçamento da OS ${r.numero_os}: R$ ${formatarMoedaSemSimbolo(r.orcamento_aprovado)}`}>
+                              mesmo orçamento
+                            </span>
+                          ) : (
+                            <>R$ {formatarMoedaSemSimbolo(r.orcamento_aprovado)}</>
+                          )}
+                        </td>
                         <td className="p-3 text-right font-mono-num font-medium">R$ {formatarMoedaSemSimbolo(r.valor_pago)}</td>
                         <td className="p-3">
                           {r.forma_pagamento === "MÚLTIPLAS" ? (

@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { Save, ReceiptText, Store, CalendarDays, Hash, Tags, Boxes, Wrench, Wallet, CircleDollarSign, CreditCard, Layers, Landmark, StickyNote, Ticket, Pencil, Trash2, Plus, X, Route, HardHat } from "lucide-react";
+import Link from "next/link";
+import { Save, ReceiptText, Store, CalendarDays, Hash, Tags, Boxes, Wrench, Wallet, CircleDollarSign, CreditCard, Layers, Landmark, StickyNote, Ticket, Pencil, Trash2, Plus, X, Route, HardHat, AlertTriangle, ArrowRight } from "lucide-react";
 import AppShell from "../../components/AppShell";
 import CurrencyInput from "../../components/CurrencyInput";
 import ComboBoxModelo from "../../components/ComboBoxModelo";
@@ -460,6 +461,26 @@ function FormularioLancamento() {
             <p className="text-xs text-danger mt-1">Nenhum tipo de serviço cadastrado para essa categoria — avise a Configurações.</p>
           )}
         </div>
+
+        {orcamentoTravado && saldoRestante !== null && saldoRestante > 0.009 && (
+          <div className="col-span-3 -mt-1 flex items-start gap-3 rounded-lg border-2 border-[#C9A227] bg-[#FFF3B0] px-4 py-3">
+            <AlertTriangle size={20} className="shrink-0 text-[#8A6D0E] mt-0.5 animate-pulse" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-[#5c4a0a]">Essa OS já tem um lançamento em aberto</p>
+              <p className="text-xs text-[#5c4a0a] mt-0.5">
+                Ainda falta receber <span className="font-mono-num font-semibold">R$ {saldoRestante.toFixed(2)}</span> desse serviço.
+                Para registrar esse pagamento, use o <strong>Contas a Receber</strong> em vez de criar um novo lançamento aqui — assim
+                não fica parecendo duplicado na Consulta.
+              </p>
+              <Link
+                href={`/contas-a-receber?os=${encodeURIComponent(numeroOsDigitado)}`}
+                className="inline-flex items-center gap-1 text-xs font-semibold text-[#8A6D0E] hover:underline mt-1.5"
+              >
+                Ir para Contas a Receber <ArrowRight size={12} />
+              </Link>
+            </div>
+          </div>
+        )}
 
         {linhaOperacao === "ih" && (
           <div>

@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Bell, History, Ticket, Pencil, Trash2, Plus, X, AlertTriangle } from "lucide-react";
 import AppShell from "../../components/AppShell";
 import Modal from "../../components/Modal";
@@ -24,6 +25,8 @@ function horasDesde(dataISO) {
 
 function ConteudoContasAReceber() {
   const { usuario, unidades, linhaFiltro } = useSessao();
+  const parametrosUrl = useSearchParams();
+  const osAutoAbriuRef = useRef(false);
   const [linhas, setLinhas] = useState([]);
   const [filtroUnidade, setFiltroUnidade] = useState("");
   const [selecionada, setSelecionada] = useState(null);
@@ -62,6 +65,19 @@ function ConteudoContasAReceber() {
   useEffect(() => {
     carregar();
   }, [unidades, linhaFiltro]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Vem de um link "Ir para Contas a Receber" (ex: do aviso em Novo
+  // lançamento) com ?os=XXXX — abre direto o popup de baixa dessa OS.
+  useEffect(() => {
+    if (osAutoAbriuRef.current) return;
+    const osDaUrl = parametrosUrl.get("os");
+    if (!osDaUrl || linhas.length === 0) return;
+    const alvo = linhas.find((l) => l.numero_os === osDaUrl);
+    if (alvo) {
+      osAutoAbriuRef.current = true;
+      abrirPopup(alvo);
+    }
+  }, [linhas]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // lembretes: OS com mais de 24h em aberto — abre automaticamente 1x por dia
   const lembretes = linhas.filter((l) => horasDesde(l.ultimo_lancamento) >= 24);
