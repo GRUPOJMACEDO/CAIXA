@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Save, ReceiptText, Store, CalendarDays, Hash, Tags, Boxes, Wrench, Wallet, CircleDollarSign, CreditCard, Layers, Landmark, StickyNote, Ticket, Pencil, Trash2, Plus, X, Route, HardHat, AlertTriangle, ArrowRight } from "lucide-react";
+import { Save, ReceiptText, Store, CalendarDays, Hash, Tags, Boxes, Wrench, Wallet, CircleDollarSign, CreditCard, Layers, Landmark, StickyNote, Ticket, Pencil, Trash2, Plus, X, Route, HardHat, AlertTriangle, ArrowRight, CheckCircle2 } from "lucide-react";
 import AppShell from "../../components/AppShell";
 import CurrencyInput from "../../components/CurrencyInput";
 import ComboBoxModelo from "../../components/ComboBoxModelo";
@@ -502,6 +502,23 @@ function FormularioLancamento() {
               >
                 Ir para Contas a Receber <ArrowRight size={12} />
               </Link>
+            </div>
+          </div>
+        )}
+
+        {/* Mesmo sem saldo em aberto (já pago integralmente), o campo Orçamento
+            fica travado nesta OS+tipo de serviço — avisa por que, senão parece
+            um bloqueio sem explicação. */}
+        {orcamentoTravado && saldoRestante !== null && saldoRestante <= 0.009 && (
+          <div className="col-span-3 -mt-1 flex items-start gap-3 rounded-lg border-2 border-line bg-canvas px-4 py-3">
+            <CheckCircle2 size={20} className="shrink-0 text-[#3F8A5C] mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-ink">Essa OS + tipo de serviço já está paga integralmente</p>
+              <p className="text-xs text-muted mt-0.5">
+                Por isso o campo Orçamento aparece travado — não há saldo em aberto para essa combinação. Se o pagamento que você quer
+                lançar é de outro serviço da mesma OS, escolha o tipo de serviço certo. Se for um valor extra sobre esse mesmo serviço,
+                confira com a Configurações antes de continuar.
+              </p>
             </div>
           </div>
         )}
