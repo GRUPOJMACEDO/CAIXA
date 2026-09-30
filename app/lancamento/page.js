@@ -71,6 +71,7 @@ function FormularioLancamento() {
   const snapshotEdicaoRef = useRef(null);
   const [saldoRestante, setSaldoRestante] = useState(null);
   const [orcamentoTravado, setOrcamentoTravado] = useState(false);
+  const [pendenciasOutroTipo, setPendenciasOutroTipo] = useState([]); // OS já tem conta aberta com OUTRO tipo de serviço
   const [mensagem, setMensagem] = useState(null);
   const [salvando, setSalvando] = useState(false);
 
@@ -197,6 +198,29 @@ function FormularioLancamento() {
       }
     }
     verificarSaldoOs();
+  }, [numeroOsDigitado, unidadeId, tipoServicoId, linhaOperacao]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // verifica se essa OS já tem pendência aberta no Contas a Receber sob um
+  // Tipo de Serviço DIFERENTE do que está sendo digitado agora — roda
+  // independente do tipo de serviço escolhido (não precisa ter selecionado
+  // ainda), pra pegar o caso de alguém escolher por engano um tipo
+  // diferente do lançamento original e a pendência antiga ficar esquecida.
+  useEffect(() => {
+    async function verificarPendenciaOutroTipo() {
+      const resultado = normalizarNumeroOS(numeroOsDigitado);
+      if (!resultado.valido || !unidadeId) {
+        setPendenciasOutroTipo([]);
+        return;
+      }
+      const { data } = await supabase
+        .from("vw_contas_a_receber")
+        .select("tipo_servico_id, tipo_servico_nome, falta_pagar")
+        .eq("unidade_id", unidadeId)
+        .eq("numero_os", resultado.valor)
+        .eq("linha", linhaOperacao);
+      setPendenciasOutroTipo((data || []).filter((p) => p.tipo_servico_id !== tipoServicoId));
+    }
+    verificarPendenciaOutroTipo();
   }, [numeroOsDigitado, unidadeId, tipoServicoId, linhaOperacao]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function executarSalvar() {
@@ -471,6 +495,35 @@ function FormularioLancamento() {
                 Ainda falta receber <span className="font-mono-num font-semibold">R$ {saldoRestante.toFixed(2)}</span> desse serviço.
                 Para registrar esse pagamento, use o <strong>Contas a Receber</strong> em vez de criar um novo lançamento aqui — assim
                 não fica parecendo duplicado na Consulta.
+              </p>
+              <Link
+                href={`/contas-a-receber?os=${encodeURIComponent(numeroOsDigitado)}`}
+                className="inline-flex items-center gap-1 text-xs font-semibold text-[#8A6D0E] hover:underline mt-1.5"
+              >
+                Ir para Contas a Receber <ArrowRight size={12} />
+              </Link>
+            </div>
+          </div>
+        )}
+
+        {pendenciasOutroTipo.length > 0 && (
+          <div className="col-span-3 -mt-1 flex items-start gap-3 rounded-lg border-2 border-[#C9A227] bg-[#FFF3B0] px-4 py-3">
+            <AlertTriangle size={20} className="shrink-0 text-[#8A6D0E] mt-0.5 animate-pulse" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-[#5c4a0a]">
+                Essa OS já tem {pendenciasOutroTipo.length > 1 ? "outras pendências" : "outra pendência"} em aberto no Contas a Receber
+              </p>
+              <ul className="text-xs text-[#5c4a0a] mt-0.5 space-y-0.5">
+                {pendenciasOutroTipo.map((p) => (
+                  <li key={p.tipo_servico_id}>
+                    <strong>{p.tipo_servico_nome || "Tipo de serviço não identificado"}</strong> — falta receber{" "}
+                    <span className="font-mono-num font-semibold">R$ {Number(p.falta_pagar).toFixed(2)}</span>
+                  </li>
+                ))}
+              </ul>
+              <p className="text-xs text-[#5c4a0a] mt-1">
+                Confira se este pagamento não é dessa mesma conta antes de continuar — se for, use o <strong>Contas a Receber</strong> escolhendo
+                o tipo de serviço certo, em vez de criar um lançamento novo.
               </p>
               <Link
                 href={`/contas-a-receber?os=${encodeURIComponent(numeroOsDigitado)}`}
