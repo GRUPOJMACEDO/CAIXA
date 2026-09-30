@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Bell, History, Ticket, Pencil, Trash2, Plus, X, AlertTriangle } from "lucide-react";
+import { Bell, History, Ticket, Pencil, Trash2, Plus, X, AlertTriangle, Search, Eraser, Wallet, PieChart, ListChecks } from "lucide-react";
 import AppShell from "../../components/AppShell";
 import Modal from "../../components/Modal";
 import CurrencyInput from "../../components/CurrencyInput";
@@ -29,6 +29,7 @@ function ConteudoContasAReceber() {
   const osAutoAbriuRef = useRef(false);
   const [linhas, setLinhas] = useState([]);
   const [filtroUnidade, setFiltroUnidade] = useState("");
+  const [buscaOs, setBuscaOs] = useState("");
   const [selecionada, setSelecionada] = useState(null);
   const [valorAgora, setValorAgora] = useState("");
   const [formaPagamento, setFormaPagamento] = useState("");
@@ -91,14 +92,23 @@ function ConteudoContasAReceber() {
     setLembretesMostrados(true);
   }, [lembretes, lembretesMostrados]);
 
-  const linhasFiltradas = filtroUnidade ? linhas.filter((l) => l.unidade_id === filtroUnidade) : linhas;
+  const buscaOsNormalizada = buscaOs.trim().toLowerCase();
+  const linhasFiltradas = linhas
+    .filter((l) => !filtroUnidade || l.unidade_id === filtroUnidade)
+    .filter((l) => !buscaOsNormalizada || l.numero_os.toLowerCase().includes(buscaOsNormalizada));
   const totalOrcamento = linhasFiltradas.reduce((s, l) => s + Number(l.orcamento_aprovado), 0);
   const totalFalta = linhasFiltradas.reduce((s, l) => s + Number(l.falta_pagar), 0);
   const percentualFalta = totalOrcamento ? (totalFalta / totalOrcamento) * 100 : 0;
+  const consultaAtiva = filtroUnidade !== "" || buscaOsNormalizada !== "";
+
+  function limparConsulta() {
+    setBuscaOs("");
+    setFiltroUnidade("");
+  }
 
   // resumo por unidade — só pra quem tem acesso a mais de uma unidade e está
   // olhando "todas" (sem escolher uma específica no filtro)
-  const mostrarResumoUnidades = unidades.length > 1 && !filtroUnidade;
+  const mostrarResumoUnidades = unidades.length > 1 && !filtroUnidade && !buscaOsNormalizada;
   const resumoPorUnidade = unidades
     .map((u) => {
       const doUnidade = linhas.filter((l) => l.unidade_id === u.id);
@@ -300,32 +310,78 @@ function ConteudoContasAReceber() {
         </div>
       </div>
 
-      {mostrarUnidade && (
-        <div className="mb-4 flex items-center gap-2">
-          <span className="field-label mb-0">Unidade:</span>
-          <select className="field-input w-56" value={filtroUnidade} onChange={(e) => setFiltroUnidade(e.target.value)}>
-            <option value="">Todas as unidades</option>
-            {unidades.map((u) => (
-              <option key={u.id} value={u.id}>{u.nome}</option>
-            ))}
-          </select>
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        {mostrarUnidade && (
+          <div className="flex items-center gap-2">
+            <span className="field-label mb-0">Unidade:</span>
+            <select className="field-input w-56" value={filtroUnidade} onChange={(e) => setFiltroUnidade(e.target.value)}>
+              <option value="">Todas as unidades</option>
+              {unidades.map((u) => (
+                <option key={u.id} value={u.id}>{u.nome}</option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        <div className="relative">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gold" />
+          <input
+            type="text"
+            className="field-input w-56 pl-8"
+            placeholder="Consultar OS…"
+            value={buscaOs}
+            onChange={(e) => setBuscaOs(e.target.value)}
+          />
         </div>
-      )}
+
+        {consultaAtiva && (
+          <button
+            onClick={limparConsulta}
+            className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-white
+              bg-gradient-to-b from-[#E0664B] to-[#C94E33] shadow-sm hover:brightness-105 hover:-translate-y-px active:translate-y-0 transition-all"
+          >
+            <Eraser size={13} /> Limpar consulta
+          </button>
+        )}
+      </div>
 
       <div className="grid grid-cols-3 gap-3 mb-6">
-        <div className="card p-4">
-          <p className="text-xs text-muted mb-1">Total a receber</p>
-          <p className="font-mono-num text-xl font-semibold text-bronze">R$ {formatarMoedaSemSimbolo(totalFalta)}</p>
+        <div className="card p-4 flex items-center gap-3">
+          <span className="w-9 h-9 rounded-full bg-bronze/10 text-bronze flex items-center justify-center shrink-0">
+            <Wallet size={16} />
+          </span>
+          <div>
+            <p className="text-xs text-muted mb-1">Total a receber</p>
+            <p className="font-mono-num text-xl font-semibold text-bronze">R$ {formatarMoedaSemSimbolo(totalFalta)}</p>
+          </div>
         </div>
-        <div className="card p-4">
-          <p className="text-xs text-muted mb-1">% do orçamento total</p>
-          <p className="font-mono-num text-xl font-semibold text-ink">{percentualFalta.toFixed(1)}%</p>
+        <div className="card p-4 flex items-center gap-3">
+          <span className="w-9 h-9 rounded-full bg-teal/10 text-teal flex items-center justify-center shrink-0">
+            <PieChart size={16} />
+          </span>
+          <div>
+            <p className="text-xs text-muted mb-1">% do orçamento total</p>
+            <p className="font-mono-num text-xl font-semibold text-ink">{percentualFalta.toFixed(1)}%</p>
+          </div>
         </div>
-        <div className="card p-4">
-          <p className="text-xs text-muted mb-1">OS em aberto</p>
-          <p className="font-mono-num text-xl font-semibold text-ink">{linhasFiltradas.length}</p>
+        <div className="card p-4 flex items-center gap-3">
+          <span className="w-9 h-9 rounded-full bg-[#3F8A5C]/10 text-[#3F8A5C] flex items-center justify-center shrink-0">
+            <ListChecks size={16} />
+          </span>
+          <div>
+            <p className="text-xs text-muted mb-1">OS em aberto</p>
+            <p className="font-mono-num text-xl font-semibold text-ink">{linhasFiltradas.length}</p>
+          </div>
         </div>
       </div>
+
+      {buscaOsNormalizada && (
+        <p className="text-xs text-muted mb-3 -mt-3">
+          {linhasFiltradas.length === 0
+            ? `Nenhuma OS em aberto encontrada para "${buscaOs.trim()}".`
+            : `${linhasFiltradas.length} resultado${linhasFiltradas.length > 1 ? "s" : ""} para "${buscaOs.trim()}".`}
+        </p>
+      )}
 
       <div className="card overflow-hidden">
         {mostrarResumoUnidades ? (
