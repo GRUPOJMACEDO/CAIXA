@@ -34,7 +34,7 @@ function ConteudoDashboard() {
   async function carregar() {
     setCarregando(true);
     const dados = filtrarPorMarca(await buscarValoresPorPeriodo(supabase, dataSelecionada, diaSeguinte(dataSelecionada), linhaFiltro, detalharLinha), marcasFiltro);
-    const lista = dados.map((u) => ({ ...u, falta: Number(u.orcamento_aprovado) - Number(u.valor_pago) }));
+    const lista = dados.map((u) => ({ ...u, falta: Number(u.falta_pagar) }));
     setLinhas(lista);
     setCarregando(false);
   }
