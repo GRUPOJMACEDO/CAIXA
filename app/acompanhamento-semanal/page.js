@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Check, Minus, Plus } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import AppShell from "../../components/AppShell";
-import { supabase } from "../../lib/supabaseClient";
+import { supabase, buscarTudo } from "../../lib/supabaseClient";
 import { useSessao } from "../../lib/SessaoContext";
 import { formatarCompacto, formatarMoedaSemSimbolo } from "../../lib/formato";
 
@@ -29,25 +29,22 @@ function Conteudo() {
   const [carregando, setCarregando] = useState(false);
 
   useEffect(() => {
-    if (unidades.length && selecionadas.length === 0) {
-      setSelecionadas(unidades.slice(0, 5).map((u) => u.id));
+    if (selecionadas.length === 0) {
+      setLancamentos([]);
+      return;
     }
-  }, [unidades]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    if (selecionadas.length === 0) return;
     setCarregando(true);
     const desde = inicioDaSemana(new Date());
     desde.setDate(desde.getDate() - semanas * 7);
-    supabase
-      .from("lancamentos")
-      .select("unidade_id, data, valor_pago")
-      .in("unidade_id", selecionadas)
-      .gte("data", desde.toISOString().slice(0, 10))
-      .then(({ data }) => {
-        setLancamentos(data || []);
-        setCarregando(false);
-      });
+    buscarTudo(() =>
+      supabase
+        .from("lancamentos")
+        .select("unidade_id, data, valor_pago")
+        .in("unidade_id", selecionadas)
+        .gte("data", desde.toISOString().slice(0, 10))
+    )
+      .then((data) => setLancamentos(data))
+      .finally(() => setCarregando(false));
   }, [selecionadas, semanas]);
 
   function alternarUnidade(id) {
@@ -96,7 +93,18 @@ function Conteudo() {
       </div>
 
       <div className="card p-4 mb-5">
-        <p className="field-label mb-2">Unidades no gráfico</p>
+        <div className="flex items-center justify-between mb-2">
+          <p className="field-label mb-0">Unidades no gráfico</p>
+          <div className="flex items-center gap-2">
+            <button type="button" className="text-xs text-gold hover:underline" onClick={() => setSelecionadas(unidades.map((u) => u.id))}>
+              Selecionar todas
+            </button>
+            <span className="text-xs text-muted">·</span>
+            <button type="button" className="text-xs text-muted hover:underline" onClick={() => setSelecionadas([])}>
+              Limpar seleção
+            </button>
+          </div>
+        </div>
         <div className="grid grid-cols-4 gap-2 max-h-40 overflow-y-auto">
           {unidades.map((u) => {
             const marcado = selecionadas.includes(u.id);
@@ -114,7 +122,9 @@ function Conteudo() {
       </div>
 
       <div className="card p-5">
-        {carregando ? (
+        {selecionadas.length === 0 ? (
+          <p className="text-sm text-muted py-16 text-center">Selecione ao menos uma unidade pra ver o gráfico.</p>
+        ) : carregando ? (
           <p className="text-sm text-muted py-16 text-center">Carregando…</p>
         ) : (
           <ResponsiveContainer width="100%" height={380}>

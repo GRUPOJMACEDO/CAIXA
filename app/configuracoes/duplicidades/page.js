@@ -1,9 +1,10 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
-import { Copy, Check, X, Pencil, Trash2, AlertTriangle, Building2, ChevronDown } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Copy, Check, X, Pencil, Trash2, AlertTriangle, Building2 } from "lucide-react";
 import AppShell from "../../../components/AppShell";
 import Modal from "../../../components/Modal";
 import BotaoAtualizar from "../../../components/BotaoAtualizar";
+import SeletorSuspenso from "../../../components/SeletorSuspenso";
 import { supabase } from "../../../lib/supabaseClient";
 import { useSessao } from "../../../lib/SessaoContext";
 import { podeVerDuplicidades, podeRevisarDuplicidades, podeVerTodasUnidades } from "../../../lib/permissions";
@@ -20,58 +21,6 @@ const ESTILO_NIVEL = {
 function formatarHora(iso) {
   if (!iso) return "";
   return new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
-}
-
-/** Seletor de múltipla escolha, suspenso — abre numa linha, fecha ao marcar uma opção. */
-function SeletorSuspenso({ rotulo, icone: Icone, opcoes, selecionados, onChange }) {
-  const [aberto, setAberto] = useState(false);
-  const ref = useRef(null);
-
-  useEffect(() => {
-    function aoClicarFora(e) {
-      if (ref.current && !ref.current.contains(e.target)) setAberto(false);
-    }
-    window.addEventListener("mousedown", aoClicarFora);
-    return () => window.removeEventListener("mousedown", aoClicarFora);
-  }, []);
-
-  function alternar(valor) {
-    onChange(selecionados.includes(valor) ? selecionados.filter((v) => v !== valor) : [...selecionados, valor]);
-    setAberto(false);
-  }
-
-  const rotuloBotao =
-    selecionados.length === 0
-      ? "Todas"
-      : selecionados.length === 1
-        ? opcoes.find((o) => o.valor === selecionados[0])?.rotulo || "1 selecionada"
-        : `${selecionados.length} selecionadas`;
-
-  return (
-    <div className="relative w-64" ref={ref}>
-      <p className="text-[11px] font-semibold text-muted uppercase tracking-wide mb-1.5 flex items-center gap-1">
-        {Icone && <Icone size={11} />} {rotulo}
-      </p>
-      <button
-        type="button"
-        onClick={() => setAberto((v) => !v)}
-        className="field-input text-sm w-full flex items-center justify-between text-left"
-      >
-        <span className="truncate">{rotuloBotao}</span>
-        <ChevronDown size={14} className={`shrink-0 transition-transform ${aberto ? "rotate-180" : ""}`} />
-      </button>
-      {aberto && (
-        <div className="absolute z-20 mt-1 w-full max-h-56 overflow-y-auto bg-white border border-line rounded-lg shadow-lg">
-          {opcoes.map((o) => (
-            <label key={o.valor} className="flex items-center gap-2 px-3 py-2 text-sm hover:bg-canvas cursor-pointer">
-              <input type="checkbox" checked={selecionados.includes(o.valor)} onChange={() => alternar(o.valor)} />
-              {o.rotulo}
-            </label>
-          ))}
-        </div>
-      )}
-    </div>
-  );
 }
 
 function Conteudo() {
@@ -252,6 +201,11 @@ function Conteudo() {
                         {l.linha === "ih" && <span className="ml-1.5 text-[9px] px-1.5 py-0.5 rounded font-medium bg-teal-soft text-teal">IH</span>}
                       </span>
                       <span className="text-xs text-muted w-40 shrink-0 truncate">{l.atendente_nome} · @{l.atendente_login}</span>
+                      <span className="text-[10px] text-muted bg-canvas px-1.5 py-0.5 rounded w-28 shrink-0 text-center truncate" title={l.forma_pagamento || ""}>
+                        {l.forma_pagamento === "MÚLTIPLAS"
+                          ? `${(l.formas_pagamento || []).length} formas`
+                          : l.forma_pagamento || "—"}
+                      </span>
                       <span className="font-mono-num text-right w-28 shrink-0">R$ {formatarMoedaSemSimbolo(l.valor_pago)}</span>
                       {podeAgir && recusado && (
                         <div className="flex items-center gap-1 shrink-0">

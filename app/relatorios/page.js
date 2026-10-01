@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { FileDown, Check, Store, CalendarDays, Wallet, Hash } from "lucide-react";
 import AppShell from "../../components/AppShell";
 import Modal from "../../components/Modal";
@@ -45,15 +45,15 @@ function Conteudo() {
   const [resultados, setResultados] = useState([]);
   const [buscando, setBuscando] = useState(false);
 
-  useEffect(() => {
-    if (unidades.length) setUnidadesSelecionadas(unidades.map((u) => u.id));
-  }, [unidades]);
-
   function alternarUnidade(id) {
     setUnidadesSelecionadas((atual) => (atual.includes(id) ? atual.filter((u) => u !== id) : [...atual, id]));
   }
 
   async function buscar() {
+    if (unidadesSelecionadas.length === 0) {
+      alert("Selecione ao menos uma unidade.");
+      return;
+    }
     setBuscando(true);
     let query = supabase
       .from("lancamentos")
@@ -104,10 +104,10 @@ function Conteudo() {
         <div>
           <label className="field-label flex items-center gap-1.5"><Store size={12} className="text-muted" /> Unidades</label>
           <button type="button" className="btn w-full flex items-center justify-center gap-1.5" onClick={() => setPopupUnidades(true)}>
-            <Store size={14} /> {unidadesSelecionadas.length} selecionada(s)
+            <Store size={14} /> {unidadesSelecionadas.length === 0 ? "Selecionar unidades" : `${unidadesSelecionadas.length} selecionada(s)`}
           </button>
         </div>
-        <button className="btn-primary" onClick={buscar} disabled={buscando}>
+        <button className="btn-primary" onClick={buscar} disabled={buscando || unidadesSelecionadas.length === 0}>
           {buscando ? "Buscando…" : "Gerar relatório"}
         </button>
       </div>
@@ -191,6 +191,15 @@ function Conteudo() {
 
       {popupUnidades && (
         <Modal titulo="Selecionar unidades" onFechar={() => setPopupUnidades(false)}>
+          <div className="flex justify-end gap-2 mb-2">
+            <button type="button" className="text-xs text-gold hover:underline" onClick={() => setUnidadesSelecionadas(unidades.map((u) => u.id))}>
+              Selecionar todas
+            </button>
+            <span className="text-xs text-muted">·</span>
+            <button type="button" className="text-xs text-muted hover:underline" onClick={() => setUnidadesSelecionadas([])}>
+              Limpar seleção
+            </button>
+          </div>
           <div className="grid grid-cols-3 gap-2 max-h-96 overflow-y-auto">
             {unidades.map((u) => {
               const marcado = unidadesSelecionadas.includes(u.id);

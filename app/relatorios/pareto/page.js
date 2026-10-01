@@ -4,6 +4,7 @@ import { BarChart3, Building2, CalendarDays, CalendarCheck2, Eraser } from "luci
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, LabelList } from "recharts";
 import AppShell from "../../../components/AppShell";
 import BotaoAtualizar from "../../../components/BotaoAtualizar";
+import SeletorSuspenso from "../../../components/SeletorSuspenso";
 import { supabase } from "../../../lib/supabaseClient";
 import { useSessao } from "../../../lib/SessaoContext";
 import { formatarMoedaSemSimbolo } from "../../../lib/formato";
@@ -168,35 +169,28 @@ function Conteudo() {
       <div className="card p-4 mb-5">
         <div className="flex items-start gap-4 flex-wrap">
           <div className="min-w-[260px] flex-1">
-            <p className="text-[11px] font-semibold text-muted uppercase tracking-wide mb-1.5 flex items-center gap-1"><Building2 size={11} /> Unidades</p>
-            <select
-              multiple
-              size={3}
-              className="field-input text-sm w-full"
-              value={unidadesSelecionadas}
-              onChange={(e) => setUnidadesSelecionadas([...e.target.selectedOptions].map((o) => o.value))}
-            >
-              {unidades.map((u) => (
-                <option key={u.id} value={u.id}>{u.nome}</option>
-              ))}
-            </select>
-            <p className="text-[10px] text-muted mt-1">Nenhuma marcada = todas. Shift ou Ctrl + clique pra marcar várias.</p>
+            <SeletorSuspenso
+              rotulo="Unidades"
+              icone={Building2}
+              opcoes={unidades.map((u) => ({ valor: u.id, rotulo: u.nome }))}
+              selecionados={unidadesSelecionadas}
+              onChange={setUnidadesSelecionadas}
+              largura="w-full"
+              rotuloTudo="Todas as unidades"
+            />
+            <p className="text-[10px] text-muted mt-1">Nenhuma marcada = todas.</p>
           </div>
 
-          <div className="min-w-[180px]">
-            <p className="text-[11px] font-semibold text-muted uppercase tracking-wide mb-1.5 flex items-center gap-1"><CalendarDays size={11} /> Mês</p>
-            <select
-              multiple
-              size={3}
-              className="field-input text-sm w-full"
-              value={mesesSelecionados}
-              onChange={(e) => setMesesSelecionados([...e.target.selectedOptions].map((o) => o.value))}
-            >
-              {mesesLista.map((m) => (
-                <option key={m.valor} value={m.valor}>{m.rotulo}</option>
-              ))}
-            </select>
-            <p className="text-[10px] text-muted mt-1">Shift + clique pra marcar vários meses.</p>
+          <div className="min-w-[220px]">
+            <SeletorSuspenso
+              rotulo="Mês"
+              icone={CalendarDays}
+              opcoes={mesesLista.map((m) => ({ valor: m.valor, rotulo: m.rotulo }))}
+              selecionados={mesesSelecionados}
+              onChange={setMesesSelecionados}
+              largura="w-full"
+              rotuloTudo="Nenhum mês"
+            />
           </div>
 
           <div className="w-[220px]">

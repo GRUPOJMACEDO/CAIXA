@@ -4,7 +4,7 @@ import { Check, Store } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LabelList } from "recharts";
 import AppShell from "../../components/AppShell";
 import Modal from "../../components/Modal";
-import { supabase } from "../../lib/supabaseClient";
+import { supabase, buscarTudo } from "../../lib/supabaseClient";
 import { useSessao } from "../../lib/SessaoContext";
 import { formatarCompacto, formatarMoedaSemSimbolo } from "../../lib/formato";
 
@@ -80,26 +80,23 @@ function Conteudo() {
   const [lancamentos, setLancamentos] = useState([]);
   const [carregando, setCarregando] = useState(false);
 
-  useEffect(() => {
-    if (unidades.length && selecionadas.length === 0) {
-      setSelecionadas(unidades.slice(0, 5).map((u) => u.id));
-    }
-  }, [unidades]); // eslint-disable-line react-hooks/exhaustive-deps
-
   const baldes = useMemo(() => gerarBaldes(modo), [modo]);
 
   useEffect(() => {
-    if (selecionadas.length === 0 || baldes.length === 0) return;
+    if (selecionadas.length === 0 || baldes.length === 0) {
+      setLancamentos([]);
+      return;
+    }
     setCarregando(true);
-    supabase
-      .from("lancamentos")
-      .select("unidade_id, data, valor_pago")
-      .in("unidade_id", selecionadas)
-      .gte("data", baldes[0].inicioStr)
-      .then(({ data }) => {
-        setLancamentos(data || []);
-        setCarregando(false);
-      });
+    buscarTudo(() =>
+      supabase
+        .from("lancamentos")
+        .select("unidade_id, data, valor_pago")
+        .in("unidade_id", selecionadas)
+        .gte("data", baldes[0].inicioStr)
+    )
+      .then((data) => setLancamentos(data))
+      .finally(() => setCarregando(false));
   }, [selecionadas, modo]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function alternarUnidade(id) {
@@ -148,7 +145,14 @@ function Conteudo() {
       </div>
 
       <div className="card p-5">
-        {carregando ? (
+        {selecionadas.length === 0 ? (
+          <div className="py-16 text-center">
+            <p className="text-sm text-muted mb-3">Selecione ao menos uma unidade pra ver o gráfico.</p>
+            <button className="btn-primary inline-flex items-center gap-2" onClick={() => setPopupUnidades(true)}>
+              <Store size={15} /> Selecionar unidades
+            </button>
+          </div>
+        ) : carregando ? (
           <p className="text-sm text-muted py-16 text-center">Carregando…</p>
         ) : (
           <ResponsiveContainer width="100%" height={400}>
@@ -174,6 +178,15 @@ function Conteudo() {
 
       {popupUnidades && (
         <Modal titulo="Selecionar unidades" subtitulo="Escolha quais unidades aparecem no gráfico" onFechar={() => setPopupUnidades(false)}>
+          <div className="flex justify-end gap-2 mb-2">
+            <button type="button" className="text-xs text-gold hover:underline" onClick={() => setSelecionadas(unidades.map((u) => u.id))}>
+              Selecionar todas
+            </button>
+            <span className="text-xs text-muted">·</span>
+            <button type="button" className="text-xs text-muted hover:underline" onClick={() => setSelecionadas([])}>
+              Limpar seleção
+            </button>
+          </div>
           <div className="grid grid-cols-3 gap-2 max-h-96 overflow-y-auto">
             {unidades.map((u) => {
               const marcado = selecionadas.includes(u.id);
