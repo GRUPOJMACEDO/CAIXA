@@ -34,6 +34,7 @@ import {
   Copy,
 } from "lucide-react";
 import BotaoModoClaroEscuro from "./BotaoModoClaroEscuro";
+import BotaoOutubroRosa from "./BotaoOutubroRosa";
 import SinoSolicitacoesSenha from "./SinoSolicitacoesSenha";
 import BotaoLinhaToggle from "./BotaoLinhaToggle";
 import BotaoFiltroMarca from "./BotaoFiltroMarca";
@@ -408,6 +409,7 @@ function Shell({ children }) {
             </div>
             <div className="w-px h-8 bg-line" />
             <SinoSolicitacoesSenha usuario={usuario} />
+            <BotaoOutubroRosa topbar />
             <BotaoModoClaroEscuro topbar />
           </div>
         </header>
