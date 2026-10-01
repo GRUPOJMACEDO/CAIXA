@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Bell, History, Ticket, Pencil, Trash2, Plus, X, AlertTriangle, Search, Eraser, Wallet, PieChart, ListChecks } from "lucide-react";
+import { Bell, History, Ticket, Pencil, Trash2, Plus, X, AlertTriangle, Search, Eraser, Wallet, PieChart, ListChecks, ShieldAlert, Check } from "lucide-react";
 import AppShell from "../../components/AppShell";
 import Modal from "../../components/Modal";
 import CurrencyInput from "../../components/CurrencyInput";
@@ -10,7 +10,7 @@ import FormasPagamentoModal from "../../components/FormasPagamentoModal";
 import { supabase } from "../../lib/supabaseClient";
 import { useSessao } from "../../lib/SessaoContext";
 import { hojeBrasil } from "../../lib/fusoHorario";
-import { podeVerTodasUnidades, podeExcluirLancamento } from "../../lib/permissions";
+import { podeVerTodasUnidades, podeExcluirLancamento, podeAlterarContasAReceber } from "../../lib/permissions";
 import { formatarMoedaSemSimbolo, formatarDataBR } from "../../lib/formato";
 import { FORMAS_PAGAMENTO, precisaParcelas as precisaParcelasFn, precisaBandeira as precisaBandeiraFn } from "../../lib/formasPagamento";
 
@@ -46,7 +46,15 @@ function ConteudoContasAReceber() {
   const [motivoExclusao, setMotivoExclusao] = useState("");
   const [processandoExclusao, setProcessandoExclusao] = useState(false);
   const [unidadeExpandida, setUnidadeExpandida] = useState(null); // { id, nome } — pop-up de resumo por unidade
+  const [alterandoOrcamento, setAlterandoOrcamento] = useState(false);
+  const [novoOrcamento, setNovoOrcamento] = useState("");
+  const [motivoOrcamento, setMotivoOrcamento] = useState("");
+  const [salvandoOrcamento, setSalvandoOrcamento] = useState(false);
+  const [editandoLancamentoId, setEditandoLancamentoId] = useState(null);
+  const [novoValorLancamento, setNovoValorLancamento] = useState("");
+  const [salvandoLancamento, setSalvandoLancamento] = useState(false);
   const podeExcluir = podeExcluirLancamento(usuario.cargo);
+  const isAdmin = podeAlterarContasAReceber(usuario.cargo);
   const unidadesMap = Object.fromEntries(unidades.map((u) => [u.id, u.nome]));
   const mostrarUnidade = podeVerTodasUnidades(usuario.cargo) || unidades.length > 1;
 
@@ -155,6 +163,120 @@ function ConteudoContasAReceber() {
     setLinhaEditandoPopup(null);
     setExcluindo(false);
     setMotivoExclusao("");
+    setAlterandoOrcamento(false);
+    setNovoOrcamento("");
+    setMotivoOrcamento("");
+    setEditandoLancamentoId(null);
+    setNovoValorLancamento("");
+  }
+
+  function abrirAlteracaoOrcamento() {
+    setNovoOrcamento(Number(selecionada.orcamento_aprovado));
+    setMotivoOrcamento("");
+    setAlterandoOrcamento(true);
+  }
+
+  async function confirmarAlteracaoOrcamento() {
+    if (!selecionada || !motivoOrcamento.trim()) return;
+    const valor = Number(novoOrcamento);
+    if (!valor || valor <= 0) {
+      alert("Informe um novo orçamento válido.");
+      return;
+    }
+    setSalvandoOrcamento(true);
+    const { error } = await supabase.rpc("admin_corrigir_orcamento_cr", {
+      p_unidade_id: selecionada.unidade_id,
+      p_numero_os: selecionada.numero_os,
+      p_tipo_servico_id: selecionada.tipo_servico_id,
+      p_linha: selecionada.linha,
+      p_novo_orcamento: valor,
+      p_motivo: motivoOrcamento.trim(),
+    });
+    setSalvandoOrcamento(false);
+    if (error) {
+      alert("Erro ao corrigir o orçamento: " + error.message);
+      return;
+    }
+    setAlterandoOrcamento(false);
+    setMotivoOrcamento("");
+    const atualizadas = await carregar();
+    const atualizada = atualizadas.find(
+      (l) =>
+        l.unidade_id === selecionada.unidade_id &&
+        l.numero_os === selecionada.numero_os &&
+        l.tipo_servico_id === selecionada.tipo_servico_id &&
+        l.linha === selecionada.linha
+    );
+    if (atualizada) setSelecionada(atualizada);
+  }
+
+  function iniciarEdicaoLancamento(h) {
+    setEditandoLancamentoId(h.id);
+    setNovoValorLancamento(Number(h.valor_pago));
+  }
+
+  async function salvarEdicaoLancamento(h) {
+    const valor = Number(novoValorLancamento);
+    if (!valor || valor <= 0) {
+      alert("Informe um valor válido.");
+      return;
+    }
+    setSalvandoLancamento(true);
+    const { error } = await supabase
+      .from("lancamentos")
+      .update({
+        valor_pago: valor,
+        motivo_exclusao: `[Admin] Valor corrigido de R$ ${formatarMoedaSemSimbolo(h.valor_pago)} para R$ ${formatarMoedaSemSimbolo(valor)}`,
+        alterado_por: usuario.id,
+        alterado_em: new Date().toISOString(),
+      })
+      .eq("id", h.id);
+    setSalvandoLancamento(false);
+    if (error) {
+      alert("Erro ao corrigir o valor: " + error.message);
+      return;
+    }
+    setEditandoLancamentoId(null);
+    await carregarHistorico(selecionada.unidade_id, selecionada.numero_os, selecionada.tipo_servico_id, selecionada.linha);
+    const atualizadas = await carregar();
+    const atualizada = atualizadas.find(
+      (l) =>
+        l.unidade_id === selecionada.unidade_id &&
+        l.numero_os === selecionada.numero_os &&
+        l.tipo_servico_id === selecionada.tipo_servico_id &&
+        l.linha === selecionada.linha
+    );
+    if (atualizada) setSelecionada(atualizada);
+  }
+
+  async function excluirLancamentoUnico(h) {
+    if (!window.confirm(`Excluir só este lançamento de R$ ${formatarMoedaSemSimbolo(h.valor_pago)} (${formatarDataBR(h.data)})?`)) return;
+    const motivo = window.prompt("Motivo da exclusão deste lançamento:");
+    if (!motivo || !motivo.trim()) return;
+    const { error: erroMotivo } = await supabase
+      .from("lancamentos")
+      .update({ motivo_exclusao: motivo.trim(), alterado_por: usuario.id, alterado_em: new Date().toISOString() })
+      .eq("id", h.id);
+    if (erroMotivo) {
+      alert("Erro ao registrar o motivo: " + erroMotivo.message);
+      return;
+    }
+    const { error } = await supabase.from("lancamentos").delete().eq("id", h.id);
+    if (error) {
+      alert("Erro ao excluir: " + error.message);
+      return;
+    }
+    await carregarHistorico(selecionada.unidade_id, selecionada.numero_os, selecionada.tipo_servico_id, selecionada.linha);
+    const atualizadas = await carregar();
+    const atualizada = atualizadas.find(
+      (l) =>
+        l.unidade_id === selecionada.unidade_id &&
+        l.numero_os === selecionada.numero_os &&
+        l.tipo_servico_id === selecionada.tipo_servico_id &&
+        l.linha === selecionada.linha
+    );
+    if (atualizada) setSelecionada(atualizada);
+    else fecharPopup();
   }
 
   async function confirmarExclusaoConta() {
@@ -513,7 +635,17 @@ function ConteudoContasAReceber() {
                 <p>
                   Você está prestes a excluir permanentemente o registro da OS{" "}
                   <span className="font-mono-num font-medium">{selecionada.numero_os}</span> do Contas a Receber
-                  (orçamento de <span className="font-mono-num font-medium">R$ {formatarMoedaSemSimbolo(selecionada.orcamento_aprovado)}</span>, sem nenhum valor pago). Essa ação não pode ser desfeita.
+                  (orçamento de <span className="font-mono-num font-medium">R$ {formatarMoedaSemSimbolo(selecionada.orcamento_aprovado)}</span>
+                  {Number(selecionada.total_pago) > 0 ? (
+                    <>
+                      , incluindo{" "}
+                      <span className="font-mono-num font-medium">R$ {formatarMoedaSemSimbolo(selecionada.total_pago)}</span> já pago e
+                      todo o histórico de lançamentos dessa conta
+                    </>
+                  ) : (
+                    <>, sem nenhum valor pago</>
+                  )}
+                  ). Essa ação não pode ser desfeita.
                 </p>
               </div>
               <div>
@@ -546,13 +678,59 @@ function ConteudoContasAReceber() {
               <div><p className="text-xs text-muted">Falta pagar</p><p className="font-mono-num font-medium text-bronze">R$ {formatarMoedaSemSimbolo(selecionada.falta_pagar)}</p></div>
             </div>
 
-            {podeExcluir && Number(selecionada.total_pago) === 0 && (
-              <button
-                className="text-xs text-danger hover:underline flex items-center gap-1"
-                onClick={() => setExcluindo(true)}
-              >
-                <Trash2 size={12} /> Excluir este registro do Contas a Receber
-              </button>
+            <div className="flex items-center gap-4">
+              {(podeExcluir && Number(selecionada.total_pago) === 0) || isAdmin ? (
+                <button
+                  className="text-xs text-danger hover:underline flex items-center gap-1"
+                  onClick={() => setExcluindo(true)}
+                >
+                  <Trash2 size={12} /> Excluir este registro do Contas a Receber
+                </button>
+              ) : null}
+              {isAdmin && !alterandoOrcamento && (
+                <button
+                  className="text-xs text-gold hover:underline flex items-center gap-1"
+                  onClick={abrirAlteracaoOrcamento}
+                >
+                  <ShieldAlert size={12} /> Corrigir orçamento desta conta
+                </button>
+              )}
+            </div>
+
+            {isAdmin && alterandoOrcamento && (
+              <div className="rounded-lg border border-gold/30 bg-gold/5 p-3 space-y-2">
+                <p className="text-xs font-medium text-ink flex items-center gap-1.5"><ShieldAlert size={13} className="text-gold" /> Corrigir orçamento (somente Administrador)</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="field-label">Novo orçamento</label>
+                    <CurrencyInput valor={novoOrcamento} onChange={setNovoOrcamento} />
+                  </div>
+                  <div>
+                    <label className="field-label">Motivo (obrigatório)</label>
+                    <input
+                      type="text"
+                      className="field-input"
+                      value={motivoOrcamento}
+                      onChange={(e) => setMotivoOrcamento(e.target.value)}
+                      placeholder="Ex: orçamento cadastrado errado"
+                    />
+                  </div>
+                </div>
+                <p className="text-xs text-muted">
+                  O novo orçamento não pode ficar menor que o total já pago (R$ {formatarMoedaSemSimbolo(selecionada.total_pago)}).
+                  Vale pra todos os lançamentos dessa mesma conta.
+                </p>
+                <div className="flex justify-end gap-2">
+                  <button className="btn text-xs" onClick={() => setAlterandoOrcamento(false)}>Cancelar</button>
+                  <button
+                    className="btn-primary text-xs disabled:opacity-40"
+                    disabled={!motivoOrcamento.trim() || !novoOrcamento || salvandoOrcamento}
+                    onClick={confirmarAlteracaoOrcamento}
+                  >
+                    {salvandoOrcamento ? "Salvando…" : "Confirmar correção"}
+                  </button>
+                </div>
+              </div>
             )}
 
             <div>
@@ -563,20 +741,58 @@ function ConteudoContasAReceber() {
                 <p className="text-sm text-muted">Nenhum lançamento anterior.</p>
               ) : (
                 <div className="card divide-y divide-line max-h-40 overflow-y-auto">
-                  {historico.map((h) => (
-                    <div key={h.id} className="px-3 py-2 flex items-center justify-between text-sm">
-                      <div>
-                        <span className="text-muted">{formatarDataBR(h.data)}</span>{" "}
-                        <span className="text-xs text-muted">— {h.usuarios?.nome_completo || "—"}</span>
+                  {historico.map((h) =>
+                    editandoLancamentoId === h.id ? (
+                      <div key={h.id} className="px-3 py-2 flex items-center gap-2 text-sm bg-gold/5">
+                        <span className="text-muted shrink-0">{formatarDataBR(h.data)}</span>
+                        <div className="w-28">
+                          <CurrencyInput valor={novoValorLancamento} onChange={setNovoValorLancamento} />
+                        </div>
+                        <div className="flex items-center gap-1 ml-auto">
+                          <button
+                            type="button"
+                            title="Salvar"
+                            disabled={salvandoLancamento}
+                            onClick={() => salvarEdicaoLancamento(h)}
+                            className="text-muted hover:text-[#3F8A5C] transition p-1 disabled:opacity-40"
+                          >
+                            <Check size={14} />
+                          </button>
+                          <button
+                            type="button"
+                            title="Cancelar"
+                            onClick={() => setEditandoLancamentoId(null)}
+                            className="text-muted hover:text-danger transition p-1"
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
                       </div>
-                      <div className="text-right">
-                        <span className="font-mono-num font-medium">R$ {formatarMoedaSemSimbolo(h.valor_pago)}</span>{" "}
-                        <span className="text-xs text-muted bg-canvas px-1.5 py-0.5 rounded ml-1">
-                          {h.forma_pagamento === "MÚLTIPLAS" ? `${(h.formas_pagamento || []).length} formas` : h.forma_pagamento || "—"}
-                        </span>
+                    ) : (
+                      <div key={h.id} className="px-3 py-2 flex items-center justify-between text-sm">
+                        <div>
+                          <span className="text-muted">{formatarDataBR(h.data)}</span>{" "}
+                          <span className="text-xs text-muted">— {h.usuarios?.nome_completo || "—"}</span>
+                        </div>
+                        <div className="text-right flex items-center gap-1.5">
+                          <span className="font-mono-num font-medium">R$ {formatarMoedaSemSimbolo(h.valor_pago)}</span>{" "}
+                          <span className="text-xs text-muted bg-canvas px-1.5 py-0.5 rounded ml-1">
+                            {h.forma_pagamento === "MÚLTIPLAS" ? `${(h.formas_pagamento || []).length} formas` : h.forma_pagamento || "—"}
+                          </span>
+                          {isAdmin && (
+                            <span className="flex items-center gap-0.5 ml-1">
+                              <button type="button" title="Corrigir valor (Administrador)" onClick={() => iniciarEdicaoLancamento(h)} className="text-muted hover:text-gold transition p-1">
+                                <Pencil size={12} />
+                              </button>
+                              <button type="button" title="Excluir só este lançamento (Administrador)" onClick={() => excluirLancamentoUnico(h)} className="text-muted hover:text-danger transition p-1">
+                                <Trash2 size={12} />
+                              </button>
+                            </span>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    )
+                  )}
                 </div>
               )}
             </div>
