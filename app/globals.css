@@ -23,6 +23,10 @@
   --color-accent-rgb: 38 112 181;      /* azul do logo */
   --color-accent-soft-rgb: 220 234 246;
   --color-accent-strong-rgb: 24 79 130;
+  --color-bronze-rgb: 156 90 52;       /* "falta pagar" e afins */
+  --color-bronze-soft-rgb: 240 221 203;
+  --color-teal-rgb: 14 90 86;          /* selo IH e afins */
+  --color-teal-soft-rgb: 220 235 233;
 }
 [data-theme="escuro"] {
   --color-ink-rgb: 234 240 247;
@@ -37,12 +41,43 @@
   --color-accent-rgb: 76 148 214;
   --color-accent-soft-rgb: 30 55 79;
   --color-accent-strong-rgb: 122 184 235;
+  --color-bronze-rgb: 156 90 52;
+  --color-bronze-soft-rgb: 240 221 203;
+  --color-teal-rgb: 14 90 86;
+  --color-teal-soft-rgb: 220 235 233;
 }
 
-/* Painel lateral (menu) e a área do login sempre em degradê azul,
-   independente do modo claro/escuro escolhido — é a cor de marca. */
+/* --- Outubro Rosa — tema sazonal, ativo por padrão durante o mês de
+   outubro (ver lib/tema.js). Mesma estrutura do tema claro, só que em
+   tons de rosa: rosa bebê para fundos leves, rosa normal nos toques
+   decorativos (selo IH) e rosa choque no essencial (botões, links,
+   menu). Verde (pago) e vermelho (perigo/excluir) não mudam. --- */
+[data-theme="rosa"] {
+  --color-ink-rgb: 107 53 80;
+  --color-ink-700-rgb: 92 42 66;
+  --color-ink-800-rgb: 74 32 53;
+  --color-ink-600-rgb: 122 61 92;
+  --color-canvas-rgb: 255 244 248;
+  --color-panel-rgb: 255 255 255;
+  --color-sidebar-rgb: 255 252 253;
+  --color-line-rgb: 251 213 227;
+  --color-muted-rgb: 150 86 111;
+  --color-accent-rgb: 217 50 117;      /* rosa choque */
+  --color-accent-soft-rgb: 255 214 232; /* rosa bebê */
+  --color-accent-strong-rgb: 167 37 90; /* rosa choque, mais forte */
+  --color-bronze-rgb: 167 37 90;
+  --color-bronze-soft-rgb: 255 214 232;
+  --color-teal-rgb: 167 37 90;
+  --color-teal-soft-rgb: 255 225 238;
+}
+
+/* Painel lateral (menu) e a área do login em degradê — azul (cor de
+   marca) ou, durante outubro, o degradê de Outubro Rosa. */
 .gradiente-marca {
   background: linear-gradient(180deg, #0E3A63 0%, #1D6FB0 100%);
+}
+[data-theme="rosa"] .gradiente-marca {
+  background: linear-gradient(180deg, #A7255A 0%, #D93275 100%);
 }
 
 body {

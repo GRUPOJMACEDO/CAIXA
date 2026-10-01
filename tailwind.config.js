@@ -25,12 +25,12 @@ module.exports = {
           soft: "#E7E8EA",
         },
         bronze: {
-          DEFAULT: "#9C5A34",
-          soft: "#F0DDCB",
+          DEFAULT: "rgb(var(--color-bronze-rgb) / <alpha-value>)",
+          soft: "rgb(var(--color-bronze-soft-rgb) / <alpha-value>)",
         },
         teal: {
-          DEFAULT: "#0E5A56",
-          soft: "#DCEBE9",
+          DEFAULT: "rgb(var(--color-teal-rgb) / <alpha-value>)",
+          soft: "rgb(var(--color-teal-soft-rgb) / <alpha-value>)",
         },
         danger: {
           DEFAULT: "#B23B2E",
