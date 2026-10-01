@@ -156,10 +156,11 @@ function Conteudo() {
                 {unidades.length > 1 && <td className="p-3">Unidade</td>}
                 <td className="p-3">Nº OS</td>
                 <td className="p-3">Tipo de serviço</td>
+                <td className="p-3">Data do lançamento</td>
                 <td className="p-3 text-right">Valor</td>
                 <td className="p-3">Motivo da exclusão</td>
                 <td className="p-3">Excluído por</td>
-                <td className="p-3">Quando</td>
+                <td className="p-3">Excluído em</td>
                 <td className="p-3"></td>
               </tr>
             </thead>
@@ -179,6 +180,7 @@ function Conteudo() {
                       {l.tipo_servico_nome || "—"}{" "}
                       {l.linha === "ih" && <span className="text-[9px] px-1.5 py-0.5 rounded font-medium bg-teal-soft text-teal">IH</span>}
                     </td>
+                    <td className="p-3 text-xs text-muted whitespace-nowrap">{formatarDataBR(l.data)}</td>
                     <td className="p-3 text-right font-mono-num font-medium">R$ {formatarMoedaSemSimbolo(l.valor_pago)}</td>
                     <td className="p-3 text-xs text-muted max-w-[220px] truncate" title={l.motivo_exclusao || ""}>
                       {l.motivo_exclusao || "—"}

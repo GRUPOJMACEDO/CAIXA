@@ -201,11 +201,21 @@ function Conteudo() {
                         {l.linha === "ih" && <span className="ml-1.5 text-[9px] px-1.5 py-0.5 rounded font-medium bg-teal-soft text-teal">IH</span>}
                       </span>
                       <span className="text-xs text-muted w-40 shrink-0 truncate">{l.atendente_nome} · @{l.atendente_login}</span>
-                      <span className="text-[10px] text-muted bg-canvas px-1.5 py-0.5 rounded w-28 shrink-0 text-center truncate" title={l.forma_pagamento || ""}>
-                        {l.forma_pagamento === "MÚLTIPLAS"
-                          ? `${(l.formas_pagamento || []).length} formas`
-                          : l.forma_pagamento || "—"}
-                      </span>
+                      {l.forma_pagamento === "MÚLTIPLAS" ? (
+                        <span className="flex flex-wrap items-center gap-1 w-44 shrink-0">
+                          {(l.formas_pagamento || []).map((f, i) => (
+                            <span key={i} className="text-[9px] text-muted bg-canvas px-1.5 py-0.5 rounded whitespace-nowrap">
+                              {f.forma_pagamento}
+                              {f.parcelas ? ` ${f.parcelas}x` : ""}
+                              {f.bandeira ? ` ${f.bandeira}` : ""} · R$ {formatarMoedaSemSimbolo(f.valor)}
+                            </span>
+                          ))}
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-muted bg-canvas px-1.5 py-0.5 rounded w-28 shrink-0 text-center truncate">
+                          {l.forma_pagamento || "—"}
+                        </span>
+                      )}
                       <span className="font-mono-num text-right w-28 shrink-0">R$ {formatarMoedaSemSimbolo(l.valor_pago)}</span>
                       {podeAgir && recusado && (
                         <div className="flex items-center gap-1 shrink-0">
