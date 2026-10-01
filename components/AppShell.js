@@ -33,6 +33,7 @@ import {
   ShieldAlert,
   Copy,
   Eraser,
+  History,
 } from "lucide-react";
 import BotaoModoClaroEscuro from "./BotaoModoClaroEscuro";
 import BotaoOutubroRosa from "./BotaoOutubroRosa";
@@ -63,6 +64,7 @@ import {
   podeVerDuplicidades,
   podeVerTodasUnidades,
   podeVerPendenciasQuitadas,
+  podeAlterarContasAReceber,
 } from "../lib/permissions";
 
 export const NAV_OPERACAO = [
@@ -106,6 +108,7 @@ export function navConfiguracoes(cargo) {
   if (podeVerEstatisticas(cargo)) itens.push({ href: "/configuracoes/estatisticas", label: "Estatísticas", icon: BarChart3, descricao: "Métricas e tendências de uso do sistema." });
   if (podeVerAuditoriaRetroativos(cargo)) itens.push({ href: "/configuracoes/auditoria-retroativos", label: "Lançamentos retroativos", icon: ShieldAlert, descricao: "Quem está lançando com data anterior ao dia atual." });
   if (podeVerPendenciasQuitadas(cargo)) itens.push({ href: "/configuracoes/pendencias-quitadas", label: "Pendências já quitadas", icon: Eraser, descricao: "OS que seguem abertas no Contas a Receber, mas já foram pagas por inteiro." });
+  if (podeAlterarContasAReceber(cargo)) itens.push({ href: "/configuracoes/itens-excluidos", label: "Itens excluídos", icon: History, descricao: "Lançamentos apagados do Contas a Receber — dá pra restaurar." });
   return itens;
 }
 
@@ -137,6 +140,7 @@ const CORES_ITEM = {
   "/configuracoes/auditoria-retroativos": "#B23B2E",
   "/configuracoes/duplicidades": "#C9752E",
   "/configuracoes/pendencias-quitadas": "#3F8A5C",
+  "/configuracoes/itens-excluidos": "#2670B5",
 };
 
 const CORES_SECAO = {
