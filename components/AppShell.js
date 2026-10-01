@@ -32,6 +32,7 @@ import {
   BarChart3,
   ShieldAlert,
   Copy,
+  Eraser,
 } from "lucide-react";
 import BotaoModoClaroEscuro from "./BotaoModoClaroEscuro";
 import BotaoOutubroRosa from "./BotaoOutubroRosa";
@@ -61,6 +62,7 @@ import {
   podeVerAuditoriaRetroativos,
   podeVerDuplicidades,
   podeVerTodasUnidades,
+  podeVerPendenciasQuitadas,
 } from "../lib/permissions";
 
 export const NAV_OPERACAO = [
@@ -103,6 +105,7 @@ export function navConfiguracoes(cargo) {
   if (podeVerManutencao(cargo)) itens.push({ href: "/configuracoes/manutencao", label: "Manutenção do banco", icon: DatabaseZap, descricao: "Apagar dados de teste antes de usar o sistema de verdade." });
   if (podeVerEstatisticas(cargo)) itens.push({ href: "/configuracoes/estatisticas", label: "Estatísticas", icon: BarChart3, descricao: "Métricas e tendências de uso do sistema." });
   if (podeVerAuditoriaRetroativos(cargo)) itens.push({ href: "/configuracoes/auditoria-retroativos", label: "Lançamentos retroativos", icon: ShieldAlert, descricao: "Quem está lançando com data anterior ao dia atual." });
+  if (podeVerPendenciasQuitadas(cargo)) itens.push({ href: "/configuracoes/pendencias-quitadas", label: "Pendências já quitadas", icon: Eraser, descricao: "OS que seguem abertas no Contas a Receber, mas já foram pagas por inteiro." });
   return itens;
 }
 
@@ -133,6 +136,7 @@ const CORES_ITEM = {
   "/configuracoes/estatisticas": "#2E6B7A",
   "/configuracoes/auditoria-retroativos": "#B23B2E",
   "/configuracoes/duplicidades": "#C9752E",
+  "/configuracoes/pendencias-quitadas": "#3F8A5C",
 };
 
 const CORES_SECAO = {
