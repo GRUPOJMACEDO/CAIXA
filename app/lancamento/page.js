@@ -274,6 +274,12 @@ function FormularioLancamento() {
         tipo: "erro",
         texto: error.message.includes("VALOR_EXCEDE_ORCAMENTO")
           ? "Valor lançado ultrapassa o orçamento aprovado da OS. Corrija o valor."
+          : error.message.includes("DUPLICIDADE_OS_CATEGORIA_TIPO")
+          ? "Já existe um lançamento com essa mesma OS, categoria e tipo de serviço."
+          : error.message.includes("CATEGORIA_DIVERGENTE_NA_OS")
+          ? "Essa OS já tem lançamento com outra categoria. Confira o número da OS ou a categoria selecionada."
+          : error.message.includes("TIPO_SERVICO_DIVERGENTE_NA_OS")
+          ? "Essa OS já tem lançamento com outro tipo de serviço. Confira o número da OS ou o tipo de serviço selecionado."
           : "Erro ao salvar: " + error.message,
       });
       return;
