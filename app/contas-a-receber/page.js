@@ -221,25 +221,11 @@ function ConteudoContasAReceber() {
       alert("Erro ao corrigir o orçamento: " + error.message);
       return;
     }
-    setAlterandoOrcamento(false);
-    setMotivoOrcamento("");
-    const atualizadas = await carregar();
-    const atualizada = atualizadas.find(
-      (l) =>
-        l.unidade_id === selecionada.unidade_id &&
-        l.numero_os === selecionada.numero_os &&
-        l.tipo_servico_id === selecionada.tipo_servico_id &&
-        l.linha === selecionada.linha
-    );
-    if (atualizada) {
-      setSelecionada(atualizada);
-      setValorAgora(Number(atualizada.falta_pagar));
-    } else {
-      // orçamento corrigido não deixou mais nada em aberto pra essa OS
-      // (ela some da view, então atualiza localmente em vez de perder os dados)
-      setSelecionada((atual) => (atual ? { ...atual, orcamento_aprovado: valor, falta_pagar: 0 } : atual));
-      setValorAgora(0);
-    }
+    // correção salva — fecha o pop-up de vez, sem cair na tela de
+    // "registrar novo pagamento" (a correção já é a ação completa,
+    // não precisa de mais nenhum passo)
+    await carregar();
+    fecharPopup();
   }
 
   function iniciarEdicaoLancamento(h) {
@@ -794,7 +780,7 @@ function ConteudoContasAReceber() {
                     disabled={!motivoOrcamento.trim() || !novoOrcamento || salvandoOrcamento}
                     onClick={confirmarAlteracaoOrcamento}
                   >
-                    {salvandoOrcamento ? "Salvando…" : "Confirmar correção"}
+                    {salvandoOrcamento ? "Salvando…" : "Salvar e fechar"}
                   </button>
                 </div>
               </div>
