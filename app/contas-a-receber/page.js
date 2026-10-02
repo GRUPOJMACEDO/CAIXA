@@ -46,6 +46,7 @@ function ConteudoContasAReceber() {
   const [motivoExclusao, setMotivoExclusao] = useState("");
   const [processandoExclusao, setProcessandoExclusao] = useState(false);
   const [unidadeExpandida, setUnidadeExpandida] = useState(null); // { id, nome } — pop-up de resumo por unidade
+  const [ordenacaoExpandida, setOrdenacaoExpandida] = useState({ campo: null, direcao: "asc" });
   const [alterandoOrcamento, setAlterandoOrcamento] = useState(false);
   const [novoOrcamento, setNovoOrcamento] = useState("");
   const [motivoOrcamento, setMotivoOrcamento] = useState("");
@@ -132,6 +133,29 @@ function ConteudoContasAReceber() {
     .filter((u) => u.qtdOs > 0)
     .sort((a, b) => b.falta - a.falta);
   const linhasDaUnidadeExpandida = unidadeExpandida ? linhas.filter((l) => l.unidade_id === unidadeExpandida.id) : [];
+  const contagemOsExpandida = {};
+  linhasDaUnidadeExpandida.forEach((l) => {
+    contagemOsExpandida[l.numero_os] = (contagemOsExpandida[l.numero_os] || 0) + 1;
+  });
+  const linhasDaUnidadeExpandidaOrdenadas = [...linhasDaUnidadeExpandida].sort((a, b) => {
+    if (!ordenacaoExpandida.campo) return 0;
+    let va, vb;
+    if (ordenacaoExpandida.campo === "numero_os") {
+      va = Number(a.numero_os) || a.numero_os;
+      vb = Number(b.numero_os) || b.numero_os;
+    } else {
+      va = new Date(a.ultimo_lancamento).getTime();
+      vb = new Date(b.ultimo_lancamento).getTime();
+    }
+    const cmp = va > vb ? 1 : va < vb ? -1 : 0;
+    return ordenacaoExpandida.direcao === "asc" ? cmp : -cmp;
+  });
+
+  function alternarOrdenacaoExpandida(campo) {
+    setOrdenacaoExpandida((atual) =>
+      atual.campo === campo ? { campo, direcao: atual.direcao === "asc" ? "desc" : "asc" } : { campo, direcao: "asc" }
+    );
+  }
 
   async function carregarHistorico(unidadeId, numeroOs, tipoServicoId, linhaCiIh) {
     setCarregandoHistorico(true);
@@ -525,7 +549,10 @@ function ConteudoContasAReceber() {
                 <tr
                   key={u.id}
                   className="border-t border-line hover:bg-canvas/60 cursor-pointer"
-                  onClick={() => setUnidadeExpandida({ id: u.id, nome: u.nome })}
+                  onClick={() => {
+                    setUnidadeExpandida({ id: u.id, nome: u.nome });
+                    setOrdenacaoExpandida({ campo: null, direcao: "asc" });
+                  }}
                 >
                   <td className="p-3 font-medium">{u.nome}</td>
                   <td className="p-3 text-right font-mono-num">R$ {formatarMoedaSemSimbolo(u.orcamento)}</td>
@@ -581,41 +608,73 @@ function ConteudoContasAReceber() {
       </div>
 
       {unidadeExpandida && (
-        <Modal titulo={unidadeExpandida.nome} subtitulo={`${linhasDaUnidadeExpandida.length} OS em aberto`} onFechar={() => setUnidadeExpandida(null)} largura="max-w-3xl">
+        <Modal titulo={unidadeExpandida.nome} subtitulo={`${linhasDaUnidadeExpandida.length} OS em aberto`} onFechar={() => setUnidadeExpandida(null)} largura="max-w-6xl">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-xs uppercase tracking-wider text-muted border-b border-line">
-                <td className="pb-2">Nº OS</td>
-                <td className="pb-2">Tipo de serviço</td>
-                <td className="pb-2 text-right">Orçamento</td>
-                <td className="pb-2 text-right"><span className="text-[#3F8A5C] font-bold bg-[#3F8A5C]/10 rounded px-2 py-0.5">Pago</span></td>
-                <td className="pb-2 text-right">Falta pagar</td>
-                <td className="pb-2">Último lançamento</td>
+                <td className="pb-2 pr-3">
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1 uppercase tracking-wider hover:text-ink"
+                    onClick={() => alternarOrdenacaoExpandida("numero_os")}
+                  >
+                    Nº OS
+                    {ordenacaoExpandida.campo === "numero_os" && (
+                      <span className="text-[10px]">{ordenacaoExpandida.direcao === "asc" ? "▲" : "▼"}</span>
+                    )}
+                  </button>
+                </td>
+                <td className="pb-2 pr-3">Tipo de serviço</td>
+                <td className="pb-2 pr-3 text-right whitespace-nowrap">Orçamento</td>
+                <td className="pb-2 pr-3 text-right whitespace-nowrap"><span className="text-[#3F8A5C] font-bold bg-[#3F8A5C]/10 rounded px-2 py-0.5">Pago</span></td>
+                <td className="pb-2 pr-3 text-right whitespace-nowrap">Falta pagar</td>
+                <td className="pb-2">
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1 uppercase tracking-wider hover:text-ink whitespace-nowrap"
+                    onClick={() => alternarOrdenacaoExpandida("ultimo_lancamento")}
+                  >
+                    Último lançamento
+                    {ordenacaoExpandida.campo === "ultimo_lancamento" && (
+                      <span className="text-[10px]">{ordenacaoExpandida.direcao === "asc" ? "▲" : "▼"}</span>
+                    )}
+                  </button>
+                </td>
               </tr>
             </thead>
             <tbody>
-              {linhasDaUnidadeExpandida.map((l) => (
-                <tr
-                  key={`${l.unidade_id}-${l.numero_os}-${l.tipo_servico_id}-${l.linha}`}
-                  className="border-t border-line hover:bg-canvas/60 cursor-pointer"
-                  onClick={() => {
-                    setUnidadeExpandida(null);
-                    abrirPopup(l);
-                  }}
-                >
-                  <td className="py-2 font-mono-num">{l.numero_os}</td>
-                  <td className="py-2 text-xs text-muted">
-                    {l.tipo_servico_nome || "—"}{" "}
-                    {l.linha === "ih" && (
-                      <span className="text-[9px] px-1.5 py-0.5 rounded font-medium bg-teal-soft text-teal">IH</span>
-                    )}
-                  </td>
-                  <td className="py-2 text-right font-mono-num">R$ {formatarMoedaSemSimbolo(l.orcamento_aprovado)}</td>
-                  <td className="py-2 text-right font-mono-num font-bold text-[#2E6B45] bg-[#3F8A5C]/5">R$ {formatarMoedaSemSimbolo(l.total_pago)}</td>
-                  <td className="py-2 text-right font-mono-num font-medium text-bronze">R$ {formatarMoedaSemSimbolo(l.falta_pagar)}</td>
-                  <td className="py-2 text-muted">{formatarDataBR(l.ultimo_lancamento)}</td>
-                </tr>
-              ))}
+              {linhasDaUnidadeExpandidaOrdenadas.map((l) => {
+                const duplicada = contagemOsExpandida[l.numero_os] > 1;
+                return (
+                  <tr
+                    key={`${l.unidade_id}-${l.numero_os}-${l.tipo_servico_id}-${l.linha}`}
+                    className={`border-t border-line hover:bg-canvas/60 cursor-pointer ${duplicada ? "bg-amber-50 border-l-4 border-l-amber-400" : ""}`}
+                    onClick={() => {
+                      setUnidadeExpandida(null);
+                      abrirPopup(l);
+                    }}
+                  >
+                    <td className="py-2.5 pr-3 font-mono-num whitespace-nowrap">
+                      {l.numero_os}
+                      {duplicada && (
+                        <span className="ml-1.5 text-[9px] px-1.5 py-0.5 rounded font-semibold bg-amber-200 text-amber-900 align-middle">
+                          DUPLICADA
+                        </span>
+                      )}
+                    </td>
+                    <td className="py-2.5 pr-3 text-xs text-muted">
+                      {l.tipo_servico_nome || "—"}{" "}
+                      {l.linha === "ih" && (
+                        <span className="text-[9px] px-1.5 py-0.5 rounded font-medium bg-teal-soft text-teal">IH</span>
+                      )}
+                    </td>
+                    <td className="py-2.5 pr-3 text-right font-mono-num whitespace-nowrap">R$ {formatarMoedaSemSimbolo(l.orcamento_aprovado)}</td>
+                    <td className="py-2.5 pr-3 text-right font-mono-num font-bold text-[#2E6B45] bg-[#3F8A5C]/5 whitespace-nowrap">R$ {formatarMoedaSemSimbolo(l.total_pago)}</td>
+                    <td className="py-2.5 pr-3 text-right font-mono-num font-medium text-bronze whitespace-nowrap">R$ {formatarMoedaSemSimbolo(l.falta_pagar)}</td>
+                    <td className="py-2.5 text-muted whitespace-nowrap">{formatarDataBR(l.ultimo_lancamento)}</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </Modal>
