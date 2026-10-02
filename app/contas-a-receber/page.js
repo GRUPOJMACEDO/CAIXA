@@ -231,7 +231,15 @@ function ConteudoContasAReceber() {
         l.tipo_servico_id === selecionada.tipo_servico_id &&
         l.linha === selecionada.linha
     );
-    if (atualizada) setSelecionada(atualizada);
+    if (atualizada) {
+      setSelecionada(atualizada);
+      setValorAgora(Number(atualizada.falta_pagar));
+    } else {
+      // orçamento corrigido não deixou mais nada em aberto pra essa OS
+      // (ela some da view, então atualiza localmente em vez de perder os dados)
+      setSelecionada((atual) => (atual ? { ...atual, orcamento_aprovado: valor, falta_pagar: 0 } : atual));
+      setValorAgora(0);
+    }
   }
 
   function iniciarEdicaoLancamento(h) {
@@ -856,6 +864,7 @@ function ConteudoContasAReceber() {
               )}
             </div>
 
+            {!alterandoOrcamento && (
             <div className="border-t border-line pt-4">
               <p className="field-label mb-1.5">Registrar novo pagamento</p>
               <div className="grid grid-cols-2 gap-3">
@@ -947,12 +956,15 @@ function ConteudoContasAReceber() {
                 </div>
               )}
             </div>
+            )}
 
             <div className="flex justify-end gap-2">
               <button className="btn" onClick={fecharPopup}>Fechar</button>
-              <button className="btn-primary" onClick={confirmarPagamento} disabled={salvando}>
-                {salvando ? "Salvando…" : "Registrar recebimento"}
-              </button>
+              {!alterandoOrcamento && (
+                <button className="btn-primary" onClick={confirmarPagamento} disabled={salvando}>
+                  {salvando ? "Salvando…" : "Registrar recebimento"}
+                </button>
+              )}
             </div>
           </div>
           )}
