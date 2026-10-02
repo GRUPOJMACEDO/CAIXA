@@ -56,6 +56,12 @@ function ConteudoContasAReceber() {
   const [editandoLancamentoId, setEditandoLancamentoId] = useState(null);
   const [novoValorLancamento, setNovoValorLancamento] = useState("");
   const [salvandoLancamento, setSalvandoLancamento] = useState(false);
+  const [baixandoOutraOs, setBaixandoOutraOs] = useState(false);
+  const [numeroOsPagamento, setNumeroOsPagamento] = useState("");
+  const [motivoBaixaOutraOs, setMotivoBaixaOutraOs] = useState("");
+  const [verificandoOutraOs, setVerificandoOutraOs] = useState(false);
+  const [verificacaoOutraOs, setVerificacaoOutraOs] = useState(null); // { valor, bate }
+  const [salvandoBaixaOutraOs, setSalvandoBaixaOutraOs] = useState(false);
   const podeExcluir = podeExcluirLancamento(usuario.cargo);
   const isAdmin = podeAlterarContasAReceber(usuario.cargo);
   const podeEditarDataRecebimento = podeLancarDataRetroativa(usuario.cargo, selecionada?.linha);
@@ -182,6 +188,10 @@ function ConteudoContasAReceber() {
     setLinhaEditandoPopup(null);
     setMostrarDataRetroativa(false);
     setDataRecebimento("");
+    setBaixandoOutraOs(false);
+    setNumeroOsPagamento("");
+    setMotivoBaixaOutraOs("");
+    setVerificacaoOutraOs(null);
     carregarHistorico(linha.unidade_id, linha.numero_os, linha.tipo_servico_id, linha.linha);
   }
 
@@ -199,6 +209,10 @@ function ConteudoContasAReceber() {
     setNovoValorLancamento("");
     setMostrarDataRetroativa(false);
     setDataRecebimento("");
+    setBaixandoOutraOs(false);
+    setNumeroOsPagamento("");
+    setMotivoBaixaOutraOs("");
+    setVerificacaoOutraOs(null);
   }
 
   function abrirAlteracaoOrcamento() {
@@ -231,6 +245,51 @@ function ConteudoContasAReceber() {
     // correção salva — fecha o pop-up de vez, sem cair na tela de
     // "registrar novo pagamento" (a correção já é a ação completa,
     // não precisa de mais nenhum passo)
+    await carregar();
+    fecharPopup();
+  }
+
+  async function verificarOutraOs() {
+    if (!selecionada || !numeroOsPagamento.trim()) return;
+    const numeroDigitado = numeroOsPagamento.trim();
+    setVerificandoOutraOs(true);
+    setVerificacaoOutraOs(null);
+    const { data, error } = await supabase
+      .from("lancamentos")
+      .select("valor_pago")
+      .eq("unidade_id", selecionada.unidade_id)
+      .eq("numero_os", numeroDigitado)
+      .eq("linha", selecionada.linha);
+    setVerificandoOutraOs(false);
+    if (error) {
+      alert("Erro ao verificar a OS: " + error.message);
+      return;
+    }
+    if (!data || data.length === 0) {
+      setVerificacaoOutraOs({ valor: 0, bate: false, naoEncontrada: true });
+      return;
+    }
+    const valorOutraOs = data.reduce((s, l) => s + Number(l.valor_pago), 0);
+    const bate = Math.abs(valorOutraOs - Number(selecionada.falta_pagar)) < 0.01;
+    setVerificacaoOutraOs({ valor: valorOutraOs, bate, naoEncontrada: false });
+  }
+
+  async function confirmarBaixaOutraOs() {
+    if (!selecionada || !verificacaoOutraOs?.bate || !motivoBaixaOutraOs.trim()) return;
+    setSalvandoBaixaOutraOs(true);
+    const { error } = await supabase.rpc("admin_baixar_cr_outra_os", {
+      p_unidade_id: selecionada.unidade_id,
+      p_numero_os: selecionada.numero_os,
+      p_tipo_servico_id: selecionada.tipo_servico_id,
+      p_linha: selecionada.linha,
+      p_numero_os_pagamento: numeroOsPagamento.trim(),
+      p_motivo: motivoBaixaOutraOs.trim(),
+    });
+    setSalvandoBaixaOutraOs(false);
+    if (error) {
+      alert("Erro ao dar baixa: " + error.message);
+      return;
+    }
     await carregar();
     fecharPopup();
   }
@@ -755,7 +814,102 @@ function ConteudoContasAReceber() {
                   <ShieldAlert size={12} /> Corrigir orçamento desta conta
                 </button>
               )}
+              {isAdmin && !baixandoOutraOs && (
+                <button
+                  className="text-xs text-gold hover:underline flex items-center gap-1"
+                  onClick={() => setBaixandoOutraOs(true)}
+                >
+                  <Search size={12} /> Pagamento foi lançado em outra OS
+                </button>
+              )}
             </div>
+
+            {isAdmin && baixandoOutraOs && (
+              <div className="rounded-lg border border-gold/30 bg-gold/5 p-3 space-y-2">
+                <p className="text-xs font-medium text-ink flex items-center gap-1.5">
+                  <Search size={13} className="text-gold" /> Baixar informando a OS onde o pagamento foi lançado (somente Administrador)
+                </p>
+                <p className="text-xs text-muted">
+                  Use isso quando o cliente já pagou, mas o lançamento foi feito por engano em outro número de OS.
+                  O sistema confere se o valor pago na outra OS bate com o saldo em aberto desta conta
+                  (R$ {formatarMoedaSemSimbolo(selecionada.falta_pagar)}) e dá baixa aqui sem lançar um novo valor.
+                </p>
+                <div className="flex items-end gap-2">
+                  <div className="flex-1">
+                    <label className="field-label">Número da OS onde o pagamento foi lançado</label>
+                    <input
+                      type="text"
+                      className="field-input"
+                      value={numeroOsPagamento}
+                      onChange={(e) => {
+                        setNumeroOsPagamento(e.target.value);
+                        setVerificacaoOutraOs(null);
+                      }}
+                      placeholder="Ex: 4176123456"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    className="btn text-xs disabled:opacity-40"
+                    disabled={!numeroOsPagamento.trim() || verificandoOutraOs}
+                    onClick={verificarOutraOs}
+                  >
+                    {verificandoOutraOs ? "Verificando…" : "Verificar"}
+                  </button>
+                </div>
+
+                {verificacaoOutraOs && verificacaoOutraOs.naoEncontrada && (
+                  <p className="text-xs text-danger">Não encontrei nenhum lançamento na OS {numeroOsPagamento.trim()} nessa unidade.</p>
+                )}
+                {verificacaoOutraOs && !verificacaoOutraOs.naoEncontrada && !verificacaoOutraOs.bate && (
+                  <p className="text-xs text-danger">
+                    O valor pago na OS {numeroOsPagamento.trim()} (R$ {formatarMoedaSemSimbolo(verificacaoOutraOs.valor)}) é diferente
+                    do saldo em aberto desta conta (R$ {formatarMoedaSemSimbolo(selecionada.falta_pagar)}). Confira o número da OS.
+                  </p>
+                )}
+                {verificacaoOutraOs && verificacaoOutraOs.bate && (
+                  <div className="rounded-lg border border-[#3F8A5C]/30 bg-[#3F8A5C]/5 p-3 space-y-2">
+                    <p className="text-xs text-[#2E6B45] flex items-center gap-1.5">
+                      <Check size={13} /> O valor pago na OS {numeroOsPagamento.trim()} (R$ {formatarMoedaSemSimbolo(verificacaoOutraOs.valor)}) bate
+                      com o saldo em aberto. Confirma a baixa desta conta sem lançar um novo valor?
+                    </p>
+                    <div>
+                      <label className="field-label">Motivo (obrigatório)</label>
+                      <input
+                        type="text"
+                        className="field-input"
+                        value={motivoBaixaOutraOs}
+                        onChange={(e) => setMotivoBaixaOutraOs(e.target.value)}
+                        placeholder="Ex: pagamento lançado por engano na OS acima"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex justify-end gap-2">
+                  <button
+                    className="btn text-xs"
+                    onClick={() => {
+                      setBaixandoOutraOs(false);
+                      setNumeroOsPagamento("");
+                      setMotivoBaixaOutraOs("");
+                      setVerificacaoOutraOs(null);
+                    }}
+                  >
+                    Cancelar
+                  </button>
+                  {verificacaoOutraOs?.bate && (
+                    <button
+                      className="btn-primary text-xs disabled:opacity-40"
+                      disabled={!motivoBaixaOutraOs.trim() || salvandoBaixaOutraOs}
+                      onClick={confirmarBaixaOutraOs}
+                    >
+                      {salvandoBaixaOutraOs ? "Salvando…" : "Confirmar baixa"}
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
 
             {isAdmin && alterandoOrcamento && (
               <div className="rounded-lg border border-gold/30 bg-gold/5 p-3 space-y-2">
@@ -857,7 +1011,7 @@ function ConteudoContasAReceber() {
               )}
             </div>
 
-            {!alterandoOrcamento && (
+            {!alterandoOrcamento && !baixandoOutraOs && (
             <div className="border-t border-line pt-4">
               <div className="flex items-center justify-between mb-1.5">
                 <p className="field-label mb-0">Registrar novo pagamento</p>
@@ -991,7 +1145,7 @@ function ConteudoContasAReceber() {
 
             <div className="flex justify-end gap-2">
               <button className="btn" onClick={fecharPopup}>Fechar</button>
-              {!alterandoOrcamento && (
+              {!alterandoOrcamento && !baixandoOutraOs && (
                 <button className="btn-primary" onClick={confirmarPagamento} disabled={salvando}>
                   {salvando ? "Salvando…" : "Registrar recebimento"}
                 </button>
