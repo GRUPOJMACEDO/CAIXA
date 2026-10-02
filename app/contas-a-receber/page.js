@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Bell, History, Ticket, Pencil, Trash2, Plus, X, AlertTriangle, Search, Eraser, Wallet, PieChart, ListChecks, ShieldAlert, Check } from "lucide-react";
+import { Bell, History, Ticket, Pencil, Trash2, Plus, X, AlertTriangle, Search, Eraser, Wallet, PieChart, ListChecks, ShieldAlert, Check, CalendarClock } from "lucide-react";
 import AppShell from "../../components/AppShell";
 import Modal from "../../components/Modal";
 import CurrencyInput from "../../components/CurrencyInput";
@@ -10,7 +10,7 @@ import FormasPagamentoModal from "../../components/FormasPagamentoModal";
 import { supabase } from "../../lib/supabaseClient";
 import { useSessao } from "../../lib/SessaoContext";
 import { hojeBrasil } from "../../lib/fusoHorario";
-import { podeVerTodasUnidades, podeExcluirLancamento, podeAlterarContasAReceber } from "../../lib/permissions";
+import { podeVerTodasUnidades, podeExcluirLancamento, podeAlterarContasAReceber, podeLancarDataRetroativa } from "../../lib/permissions";
 import { formatarMoedaSemSimbolo, formatarDataBR } from "../../lib/formato";
 import { FORMAS_PAGAMENTO, precisaParcelas as precisaParcelasFn, precisaBandeira as precisaBandeiraFn } from "../../lib/formasPagamento";
 
@@ -33,6 +33,8 @@ function ConteudoContasAReceber() {
   const [selecionada, setSelecionada] = useState(null);
   const [valorAgora, setValorAgora] = useState("");
   const [formaPagamento, setFormaPagamento] = useState("");
+  const [mostrarDataRetroativa, setMostrarDataRetroativa] = useState(false);
+  const [dataRecebimento, setDataRecebimento] = useState("");
   const [salvando, setSalvando] = useState(false);
   const [historico, setHistorico] = useState([]);
   const [carregandoHistorico, setCarregandoHistorico] = useState(false);
@@ -56,6 +58,7 @@ function ConteudoContasAReceber() {
   const [salvandoLancamento, setSalvandoLancamento] = useState(false);
   const podeExcluir = podeExcluirLancamento(usuario.cargo);
   const isAdmin = podeAlterarContasAReceber(usuario.cargo);
+  const podeEditarDataRecebimento = podeLancarDataRetroativa(usuario.cargo, selecionada?.linha);
   const unidadesMap = Object.fromEntries(unidades.map((u) => [u.id, u.nome]));
   const mostrarUnidade = podeVerTodasUnidades(usuario.cargo) || unidades.length > 1;
 
@@ -177,6 +180,8 @@ function ConteudoContasAReceber() {
     setFormaPagamento("");
     setFormasPagamentoPopup([]);
     setLinhaEditandoPopup(null);
+    setMostrarDataRetroativa(false);
+    setDataRecebimento("");
     carregarHistorico(linha.unidade_id, linha.numero_os, linha.tipo_servico_id, linha.linha);
   }
 
@@ -192,6 +197,8 @@ function ConteudoContasAReceber() {
     setMotivoOrcamento("");
     setEditandoLancamentoId(null);
     setNovoValorLancamento("");
+    setMostrarDataRetroativa(false);
+    setDataRecebimento("");
   }
 
   function abrirAlteracaoOrcamento() {
@@ -346,7 +353,7 @@ function ConteudoContasAReceber() {
     setSalvando(true);
     const { error } = await supabase.from("lancamentos").insert({
       unidade_id: selecionada.unidade_id,
-      data: hojeBrasil(),
+      data: podeEditarDataRecebimento && mostrarDataRetroativa && dataRecebimento ? dataRecebimento : hojeBrasil(),
       numero_os: selecionada.numero_os,
       categoria_id: selecionada.categoria_id,
       modelo_id: selecionada.modelo_id,
@@ -852,7 +859,45 @@ function ConteudoContasAReceber() {
 
             {!alterandoOrcamento && (
             <div className="border-t border-line pt-4">
-              <p className="field-label mb-1.5">Registrar novo pagamento</p>
+              <div className="flex items-center justify-between mb-1.5">
+                <p className="field-label mb-0">Registrar novo pagamento</p>
+                {podeEditarDataRecebimento && !mostrarDataRetroativa && (
+                  <button
+                    type="button"
+                    className="text-xs text-gold hover:underline flex items-center gap-1"
+                    onClick={() => {
+                      setMostrarDataRetroativa(true);
+                      setDataRecebimento(hojeBrasil());
+                    }}
+                  >
+                    <CalendarClock size={12} /> Lançar com data anterior
+                  </button>
+                )}
+              </div>
+              {podeEditarDataRecebimento && mostrarDataRetroativa && (
+                <div className="mb-3 flex items-end gap-2">
+                  <div>
+                    <label className="field-label">Data do recebimento</label>
+                    <input
+                      type="date"
+                      className="field-input"
+                      value={dataRecebimento}
+                      max={hojeBrasil()}
+                      onChange={(e) => setDataRecebimento(e.target.value)}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    className="text-xs text-muted hover:text-danger transition flex items-center gap-1 mb-2"
+                    onClick={() => {
+                      setMostrarDataRetroativa(false);
+                      setDataRecebimento("");
+                    }}
+                  >
+                    <X size={12} /> usar data de hoje
+                  </button>
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="field-label">Valor a receber agora</label>
