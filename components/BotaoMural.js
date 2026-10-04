@@ -4,7 +4,7 @@ import { MessageCircle, Send, Bell, BellOff, X, Smile, AtSign } from "lucide-rea
 import { supabase } from "../lib/supabaseClient";
 import { useSessao } from "../lib/SessaoContext";
 
-const INTERVALO_VERIFICACAO_MS = 20000;
+const INTERVALO_VERIFICACAO_MS = 300000; // 5 min — reforço; a atualização principal é via Realtime
 
 const EMOJIS = [
   "😀", "😂", "😅", "😊", "😍", "🤔", "😮", "😢", "😡", "👍",
@@ -113,6 +113,23 @@ export default function BotaoMural() {
     const intervalo = setInterval(verificarNaoLidas, INTERVALO_VERIFICACAO_MS);
     return () => clearInterval(intervalo);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Realtime: assim que chega mensagem nova ou uma menção, atualiza na hora
+  // (o intervalo acima vira só um reforço, caso o Realtime fique indisponível).
+  useEffect(() => {
+    const canal = supabase
+      .channel(`mural-realtime-${usuario.id}`)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "mural_mensagens" }, () => {
+        verificarNaoLidas();
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "mural_notificacoes", filter: `usuario_id=eq.${usuario.id}` }, () => {
+        verificarNaoLidas();
+      })
+      .subscribe();
+    return () => {
+      supabase.removeChannel(canal);
+    };
+  }, [usuario.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function carregarMensagens() {
     const { data } = await supabase

@@ -63,8 +63,21 @@ export default function PainelTV() {
 
   useEffect(() => {
     carregar();
-    const recarrega = setInterval(carregar, 60000);
+    const recarrega = setInterval(carregar, 600000); // 10 min — reforço; Realtime cobre as mudanças normais
     return () => clearInterval(recarrega);
+  }, []);
+
+  // Realtime: qualquer lançamento novo/alterado atualiza o painel na hora.
+  useEffect(() => {
+    const canal = supabase
+      .channel("painel-tv-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "lancamentos" }, () => {
+        carregar();
+      })
+      .subscribe();
+    return () => {
+      supabase.removeChannel(canal);
+    };
   }, []);
 
   useEffect(() => {

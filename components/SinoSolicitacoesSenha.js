@@ -26,6 +26,20 @@ export default function SinoSolicitacoesSenha({ usuario }) {
     return () => clearInterval(intervalo);
   }, [usuario]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Realtime: avisa na hora quando chega um pedido novo, sem esperar o intervalo.
+  useEffect(() => {
+    if (!podeVerSolicitacoesSenha(usuario.cargo)) return;
+    const canal = supabase
+      .channel("solicitacoes-senha-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "solicitacoes_senha" }, () => {
+        carregar();
+      })
+      .subscribe();
+    return () => {
+      supabase.removeChannel(canal);
+    };
+  }, [usuario]); // eslint-disable-line react-hooks/exhaustive-deps
+
   if (!podeVerSolicitacoesSenha(usuario.cargo)) return null;
 
   async function marcarResolvido(id) {
