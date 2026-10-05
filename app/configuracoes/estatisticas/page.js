@@ -111,7 +111,7 @@ function categoriaEfetiva(nome) {
 // mantém a mesma cor nas duas tabelas de comparação (geral e de taxas).
 const CORES_COMPARACAO = ["#2670B5", "#0E7A72", "#B8862E", "#7C56B5", "#B23B2E", "#2E7D5B", "#9C6B14", "#4A6FA5"];
 
-function TabelaComparacaoUnidades({ titulo, subtitulo, icone: Icone, corAccent, dados, unidadeIds, corFn, nomeFn, carregando, rotuloTicket, aoClicarUnidade }) {
+function TabelaComparacaoUnidades({ titulo, subtitulo, icone: Icone, corAccent, dados, unidadeIds, corFn, nomeFn, carregando, rotuloTicket, aoClicarUnidade, detalhavelFn }) {
   const linhas = unidadeIds
     .map((id) => dados.find((d) => d.unidade_id === id) || { unidade_id: id, qtd_os: 0, valor_total: 0 })
     .map((d) => ({ ...d, ticket_medio: Number(d.qtd_os) > 0 ? Number(d.valor_total) / Number(d.qtd_os) : 0 }));
@@ -129,19 +129,20 @@ function TabelaComparacaoUnidades({ titulo, subtitulo, icone: Icone, corAccent, 
         <div className="space-y-3">
           {linhas.map((l) => {
             const cor = corFn(l.unidade_id);
+            const clicavel = !!aoClicarUnidade && (!detalhavelFn || detalhavelFn(l.unidade_id));
             const pct = Math.max(4, Math.round((l.ticket_medio / maxTicket) * 100));
             return (
               <div
                 key={l.unidade_id}
-                onClick={() => aoClicarUnidade && aoClicarUnidade(l.unidade_id)}
-                title="Clique para ver os lançamentos que compõem esses valores"
-                className={`rounded-xl border border-line overflow-hidden transition ${aoClicarUnidade ? "cursor-pointer hover:border-[color:var(--cor-hover)] hover:shadow-sm" : ""}`}
+                onClick={() => clicavel && aoClicarUnidade(l.unidade_id)}
+                title={clicavel ? "Clique para ver os lançamentos que compõem esses valores" : undefined}
+                className={`rounded-xl border border-line overflow-hidden transition ${clicavel ? "cursor-pointer hover:border-[color:var(--cor-hover)] hover:shadow-sm" : ""}`}
                 style={{ "--cor-hover": cor }}
               >
                 <div className="flex items-center gap-2 px-4 py-2" style={{ background: `${cor}12` }}>
                   <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: cor }} />
                   <span className="text-sm font-semibold text-ink truncate">{nomeFn(l.unidade_id)}</span>
-                  {aoClicarUnidade && <ClipboardList size={13} className="text-muted ml-auto shrink-0" />}
+                  {clicavel && <ClipboardList size={13} className="text-muted ml-auto shrink-0" />}
                 </div>
                 <div className="grid grid-cols-3 gap-3 px-4 py-3">
                   <div>
@@ -174,6 +175,16 @@ function TabelaComparacaoUnidades({ titulo, subtitulo, icone: Icone, corAccent, 
 function Conteudo() {
   const { usuario, unidades, marcasDisponiveis } = useSessao();
   const permitido = podeVerEstatisticas(usuario.cargo);
+
+  // Comparação entre unidades: a Gerência enxerga TODAS as unidades ativas
+  // nesse item (só nele — o resto da tela segue limitado às unidades dela).
+  const [unidadesComparacaoLista, setUnidadesComparacaoLista] = useState(null);
+  useEffect(() => {
+    if (!permitido) return;
+    supabase.rpc("unidades_para_comparacao").then(({ data, error }) => {
+      if (!error && Array.isArray(data)) setUnidadesComparacaoLista(data);
+    });
+  }, [permitido]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const semanas = listaSemanasRecentes(QTD_SEMANAS);
   const meses = listaMesesRecentes(QTD_MESES);
@@ -462,7 +473,7 @@ function Conteudo() {
 
   // Unidades disponíveis pro controle de comparação (respeitam as mesmas
   // unidades que o usuário enxerga na tela toda).
-  const unidadesOrdenadas = [...unidades].sort((a, b) => a.nome.localeCompare(b.nome));
+  const unidadesOrdenadas = [...(unidadesComparacaoLista || unidades)].sort((a, b) => a.nome.localeCompare(b.nome));
   function alternarUnidadeComparacao(id) {
     setUnidadesComparacao((atual) => (atual.includes(id) ? atual.filter((u) => u !== id) : [...atual, id]));
   }
@@ -470,8 +481,12 @@ function Conteudo() {
     const idx = unidadesComparacao.indexOf(id);
     return CORES_COMPARACAO[idx % CORES_COMPARACAO.length];
   }
+  // Detalhe de lançamentos só das unidades do próprio usuário (de outras, só os totais)
+  function unidadeEhMinha(id) {
+    return unidades.some((u) => u.id === id);
+  }
   function nomeDaUnidade(id) {
-    return unidades.find((u) => u.id === id)?.nome || "—";
+    return (unidadesComparacaoLista || unidades).find((u) => u.id === id)?.nome || "—";
   }
 
   return (
@@ -829,6 +844,7 @@ function Conteudo() {
               carregando={comparacaoCarregando}
               rotuloTicket="Ticket médio"
               aoClicarUnidade={(id) => abrirDetalheUnidade(id, nomeDaUnidade(id), corDaUnidade(id), incluirTaxa ? "incluir" : "excluir")}
+              detalhavelFn={unidadeEhMinha}
             />
 
             {incluirTaxa && (
@@ -844,6 +860,7 @@ function Conteudo() {
                 carregando={comparacaoCarregando}
                 rotuloTicket="Ticket médio das taxas"
                 aoClicarUnidade={(id) => abrirDetalheUnidade(id, nomeDaUnidade(id), corDaUnidade(id), "somente")}
+                detalhavelFn={unidadeEhMinha}
               />
             )}
           </>
