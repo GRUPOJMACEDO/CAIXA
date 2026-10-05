@@ -11,6 +11,14 @@ cd /d "%~dp0"
 echo Pasta atual: %cd%
 echo.
 
+rem Às vezes sobra um travamento do Git de uma execução anterior que foi
+rem interrompida (ou do OneDrive mexendo na pasta ao mesmo tempo). Isso
+rem trava qualquer comando git com "Unable to create .git/index.lock".
+rem Removendo esses arquivos de travamento antes de começar, se existirem.
+if exist ".git\index.lock" del /f /q ".git\index.lock" >nul 2>&1
+if exist ".git\HEAD.lock" del /f /q ".git\HEAD.lock" >nul 2>&1
+if exist ".git\objects\maintenance.lock" del /f /q ".git\objects\maintenance.lock" >nul 2>&1
+
 git config --global user.name >nul 2>&1
 if not errorlevel 1 goto GIT_CONFIGURADO
 
@@ -79,21 +87,20 @@ echo Preparando os arquivos...
 git add .
 echo.
 
+rem Se tiver algo novo preparado (staged), commita. Se nao tiver, so pula
+rem essa parte - mas continua pro envio de qualquer commit que ja exista
+rem aqui no computador e ainda nao tenha ido pro GitHub.
 git diff --cached --quiet
-if not errorlevel 1 (
-    echo Nao ha nenhuma mudanca nova para enviar.
-    echo Se voce esperava ver algo aqui, confira se salvou
-    echo os arquivos certos na pasta certa antes de rodar isso.
+if errorlevel 1 (
+    set /p MENSAGEM="Descreva rapidamente o que mudou (ex: ajustes de tela): "
+    if "!MENSAGEM!"=="" set MENSAGEM=Atualizacao do sistema CAIXA
+    git commit -m "!MENSAGEM!"
     echo.
-    pause
-    exit /b 0
+) else (
+    echo Nao ha arquivo novo para preparar agora.
+    echo Vou conferir se ja existe algum commit pendente de envio.
+    echo.
 )
-
-set /p MENSAGEM="Descreva rapidamente o que mudou (ex: ajustes de tela): "
-if "%MENSAGEM%"=="" set MENSAGEM=Atualizacao do sistema CAIXA
-
-git commit -m "%MENSAGEM%"
-echo.
 
 echo Enviando para o GitHub...
 echo (pode abrir uma janela do navegador pedindo login no GitHub - faca login normalmente)
@@ -102,9 +109,10 @@ git push -u origin main
 if errorlevel 1 (
     echo.
     echo ============================================
-    echo   ERRO ao enviar para o GitHub! O commit foi
-    echo   feito no seu computador, mas NAO chegou ao
-    echo   GitHub nem ao site publicado.
+    echo   ERRO ao enviar para o GitHub! Se foi feito
+    echo   algum commit, ele ficou salvo no seu
+    echo   computador, mas NAO chegou ao GitHub nem
+    echo   ao site publicado.
     echo   Tire um print desta tela inteira e mande
     echo   para o Claude.
     echo ============================================
@@ -115,9 +123,10 @@ if errorlevel 1 (
 
 echo.
 echo ============================================
-echo   Concluido! O envio para o GitHub foi feito
-echo   com sucesso. O Vercel deve publicar a nova
-echo   versao em 1 a 2 minutos.
+echo   Concluido! Tudo o que estava pendente foi
+echo   enviado para o GitHub. Se havia algo novo,
+echo   o Vercel deve publicar a nova versao em
+echo   1 a 2 minutos.
 echo ============================================
 echo.
 pause
