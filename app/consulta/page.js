@@ -9,7 +9,7 @@ import FormasPagamentoModal from "../../components/FormasPagamentoModal";
 import { supabase } from "../../lib/supabaseClient";
 import { useSessao } from "../../lib/SessaoContext";
 import { hojeBrasil } from "../../lib/fusoHorario";
-import { podeAlterar, podeExcluirLancamento, podeLancarDataRetroativa, podeExportarConsulta, podeAlterarContasAReceber } from "../../lib/permissions";
+import { podeAlterar, podeExcluirLancamento, podeLancarDataRetroativa, podeExportarConsulta, podeCorrigirOrcamentoCr } from "../../lib/permissions";
 import { iconeCategoria } from "../../lib/iconesCategoria";
 import { formatarDataBR, formatarMoedaSemSimbolo } from "../../lib/formato";
 import { FORMAS_PAGAMENTO, BANDEIRAS, precisaParcelas as precisaParcelasFn, precisaBandeira as precisaBandeiraFn } from "../../lib/formasPagamento";
@@ -71,7 +71,7 @@ function Conteudo() {
     }
   }, [linhaFiltro]); // eslint-disable-line react-hooks/exhaustive-deps
   const podeEditar = podeAlterar(usuario.cargo, usuario.linha);
-  const isAdminConsulta = podeAlterarContasAReceber(usuario.cargo);
+  const isAdminConsulta = podeCorrigirOrcamentoCr(usuario.cargo);
   const podeEditarData = podeLancarDataRetroativa(usuario.cargo);
   const podeExcluir = podeExcluirLancamento(usuario.cargo);
   const podeExportar = podeExportarConsulta(usuario.cargo);
@@ -330,7 +330,7 @@ function Conteudo() {
       if ((outrosNaOs || 0) > 0) {
         if (!isAdminConsulta) {
           alert(
-            "Essa OS já tem outro lançamento com o mesmo tipo de serviço, então o orçamento é compartilhado entre eles — mudar aqui não teria efeito. Só o Administrador pode corrigir esse valor (ele ajusta todos os lançamentos dessa OS de uma vez, pra não ficar inconsistente)."
+            "Essa OS já tem outro lançamento com o mesmo tipo de serviço, então o orçamento é compartilhado entre eles — mudar aqui não teria efeito. Só o Administrador ou a Gerência podem corrigir esse valor (ajusta todos os lançamentos dessa OS de uma vez, pra não ficar inconsistente)."
           );
           return;
         }
@@ -873,7 +873,7 @@ function Conteudo() {
                     ) : (
                       <p className="text-xs text-amber-700 mt-1.5">
                         Se essa OS tiver outro lançamento com o mesmo tipo de serviço, só o Administrador
-                        consegue corrigir o orçamento.
+                        ou a Gerência conseguem corrigir o orçamento.
                       </p>
                     )
                   )}

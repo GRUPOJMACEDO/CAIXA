@@ -10,7 +10,7 @@ import FormasPagamentoModal from "../../components/FormasPagamentoModal";
 import { supabase } from "../../lib/supabaseClient";
 import { useSessao } from "../../lib/SessaoContext";
 import { hojeBrasil } from "../../lib/fusoHorario";
-import { CARGOS, podeVerTodasUnidades, podeExcluirLancamento, podeAlterarContasAReceber, podeLancarDataRetroativa } from "../../lib/permissions";
+import { CARGOS, podeVerTodasUnidades, podeExcluirLancamento, podeAlterarContasAReceber, podeCorrigirOrcamentoCr, podeLancarDataRetroativa } from "../../lib/permissions";
 import { formatarMoedaSemSimbolo, formatarDataBR } from "../../lib/formato";
 import { FORMAS_PAGAMENTO, BANDEIRAS, precisaParcelas as precisaParcelasFn, precisaBandeira as precisaBandeiraFn } from "../../lib/formasPagamento";
 
@@ -66,6 +66,7 @@ function ConteudoContasAReceber() {
   const [salvandoBaixaOutraOs, setSalvandoBaixaOutraOs] = useState(false);
   const podeExcluir = podeExcluirLancamento(usuario.cargo);
   const isAdmin = podeAlterarContasAReceber(usuario.cargo);
+  const podeCorrigirOrcamento = podeCorrigirOrcamentoCr(usuario.cargo);
   // Gerência, Supervisão e Administrador podem excluir uma conta do Contas a
   // Receber mesmo já tendo valor pago (os demais cargos com acesso a excluir
   // só podem quando ainda não tem nada pago).
@@ -823,7 +824,7 @@ function ConteudoContasAReceber() {
                   <Trash2 size={12} /> Excluir este registro do Contas a Receber
                 </button>
               ) : null}
-              {isAdmin && !alterandoOrcamento && (
+              {podeCorrigirOrcamento && !alterandoOrcamento && (
                 <button
                   className="text-xs text-gold hover:underline flex items-center gap-1"
                   onClick={abrirAlteracaoOrcamento}
@@ -928,9 +929,9 @@ function ConteudoContasAReceber() {
               </div>
             )}
 
-            {isAdmin && alterandoOrcamento && (
+            {podeCorrigirOrcamento && alterandoOrcamento && (
               <div className="rounded-lg border border-gold/30 bg-gold/5 p-3 space-y-2">
-                <p className="text-xs font-medium text-ink flex items-center gap-1.5"><ShieldAlert size={13} className="text-gold" /> Corrigir orçamento (somente Administrador)</p>
+                <p className="text-xs font-medium text-ink flex items-center gap-1.5"><ShieldAlert size={13} className="text-gold" /> Corrigir orçamento</p>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="field-label">Novo orçamento</label>
