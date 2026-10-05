@@ -12,7 +12,7 @@ import { useSessao } from "../../lib/SessaoContext";
 import { hojeBrasil } from "../../lib/fusoHorario";
 import { CARGOS, podeVerTodasUnidades, podeExcluirLancamento, podeAlterarContasAReceber, podeLancarDataRetroativa } from "../../lib/permissions";
 import { formatarMoedaSemSimbolo, formatarDataBR } from "../../lib/formato";
-import { FORMAS_PAGAMENTO, precisaParcelas as precisaParcelasFn, precisaBandeira as precisaBandeiraFn } from "../../lib/formasPagamento";
+import { FORMAS_PAGAMENTO, BANDEIRAS, precisaParcelas as precisaParcelasFn, precisaBandeira as precisaBandeiraFn } from "../../lib/formasPagamento";
 
 let proximoIdLinhaCr = 1;
 function gerarIdLinhaCr() {
@@ -33,6 +33,8 @@ function ConteudoContasAReceber() {
   const [selecionada, setSelecionada] = useState(null);
   const [valorAgora, setValorAgora] = useState("");
   const [formaPagamento, setFormaPagamento] = useState("");
+  const [parcelas, setParcelas] = useState("");
+  const [bandeira, setBandeira] = useState("");
   const [mostrarDataRetroativa, setMostrarDataRetroativa] = useState(false);
   const [dataRecebimento, setDataRecebimento] = useState("");
   const [salvando, setSalvando] = useState(false);
@@ -69,6 +71,8 @@ function ConteudoContasAReceber() {
   // só podem quando ainda não tem nada pago).
   const podeExcluirSempre = [CARGOS.GERENCIA, CARGOS.SUPERVISAO, CARGOS.ADMINISTRADOR].includes(usuario.cargo);
   const podeEditarDataRecebimento = podeLancarDataRetroativa(usuario.cargo, selecionada?.linha);
+  const precisaParcelasUnica = precisaParcelasFn(formaPagamento);
+  const precisaBandeiraUnica = precisaBandeiraFn(formaPagamento);
   const unidadesMap = Object.fromEntries(unidades.map((u) => [u.id, u.nome]));
   const mostrarUnidade = podeVerTodasUnidades(usuario.cargo) || unidades.length > 1;
 
@@ -196,6 +200,8 @@ function ConteudoContasAReceber() {
     setNumeroOsPagamento("");
     setMotivoBaixaOutraOs("");
     setVerificacaoOutraOs(null);
+    setParcelas("");
+    setBandeira("");
     carregarHistorico(linha.unidade_id, linha.numero_os, linha.tipo_servico_id, linha.linha);
   }
 
@@ -217,6 +223,8 @@ function ConteudoContasAReceber() {
     setNumeroOsPagamento("");
     setMotivoBaixaOutraOs("");
     setVerificacaoOutraOs(null);
+    setParcelas("");
+    setBandeira("");
   }
 
   function abrirAlteracaoOrcamento() {
@@ -418,20 +426,21 @@ function ConteudoContasAReceber() {
     }
 
     setSalvando(true);
-    const { error } = await supabase.from("lancamentos").insert({
-      unidade_id: selecionada.unidade_id,
-      data: podeEditarDataRecebimento && mostrarDataRetroativa && dataRecebimento ? dataRecebimento : hojeBrasil(),
-      numero_os: selecionada.numero_os,
-      categoria_id: selecionada.categoria_id,
-      modelo_id: selecionada.modelo_id,
-      tipo_servico_id: selecionada.tipo_servico_id,
-      linha: selecionada.linha,
-      orcamento_aprovado: Number(selecionada.orcamento_aprovado),
-      valor_pago: valorEfetivo,
-      forma_pagamento: usaMultiplas ? "MÚLTIPLAS" : formaPagamento,
-      formas_pagamento: usaMultiplas ? formasPagamentoPopup.map(({ id, ...resto }) => resto) : null,
-      atendente_id: usuario.id,
-      criado_por: usuario.id,
+    const { error } = await supabase.rpc("registrar_pagamento_cr", {
+      p_unidade_id: selecionada.unidade_id,
+      p_numero_os: selecionada.numero_os,
+      p_categoria_id: selecionada.categoria_id,
+      p_modelo_id: selecionada.modelo_id,
+      p_tipo_servico_id: selecionada.tipo_servico_id,
+      p_linha: selecionada.linha,
+      p_data: podeEditarDataRecebimento && mostrarDataRetroativa && dataRecebimento ? dataRecebimento : hojeBrasil(),
+      p_valor_pago: valorEfetivo,
+      p_forma_pagamento: usaMultiplas ? "MÚLTIPLAS" : formaPagamento,
+      p_formas_pagamento: usaMultiplas ? formasPagamentoPopup.map(({ id, ...resto }) => resto) : null,
+      p_parcelas: !usaMultiplas && precisaParcelasUnica && parcelas ? Number(parcelas) : null,
+      p_bandeira: !usaMultiplas && precisaBandeiraUnica ? bandeira : null,
+      p_atendente_id: usuario.id,
+      p_criado_por: usuario.id,
     });
     setSalvando(false);
     if (error) {
@@ -1098,6 +1107,41 @@ function ConteudoContasAReceber() {
                   )}
                 </div>
               </div>
+
+              {formasPagamentoPopup.length === 0 && (precisaParcelasUnica || precisaBandeiraUnica) && (
+                <div className="grid grid-cols-2 gap-3 mt-3">
+                  {precisaParcelasUnica && (
+                    <div>
+                      <label className="field-label">Parcelas</label>
+                      <select className="field-input" value={parcelas} onChange={(e) => setParcelas(e.target.value)}>
+                        <option value="">1x</option>
+                        {[2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
+                          <option key={n} value={n}>{n}x</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                  {precisaBandeiraUnica && (
+                    <div className={precisaParcelasUnica ? "" : "col-span-2"}>
+                      <label className="field-label">Bandeira</label>
+                      <div className="flex gap-2 flex-wrap">
+                        {BANDEIRAS.map((b) => (
+                          <button
+                            type="button"
+                            key={b}
+                            onClick={() => setBandeira(b)}
+                            className={`px-3 py-1.5 rounded-lg border text-xs transition ${
+                              bandeira === b ? "border-gold bg-gold-soft/60 text-gold-strong font-medium" : "border-line bg-white text-muted hover:border-gold/50"
+                            }`}
+                          >
+                            {b}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {formasPagamentoPopup.length > 0 && (
                 <div className="mt-3">
