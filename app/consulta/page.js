@@ -9,7 +9,7 @@ import FormasPagamentoModal from "../../components/FormasPagamentoModal";
 import { supabase } from "../../lib/supabaseClient";
 import { useSessao } from "../../lib/SessaoContext";
 import { hojeBrasil } from "../../lib/fusoHorario";
-import { podeAlterar, podeExcluirLancamento, podeLancarDataRetroativa, podeExportarConsulta } from "../../lib/permissions";
+import { podeAlterar, podeExcluirLancamento, podeLancarDataRetroativa, podeExportarConsulta, podeAlterarContasAReceber } from "../../lib/permissions";
 import { iconeCategoria } from "../../lib/iconesCategoria";
 import { formatarDataBR, formatarMoedaSemSimbolo } from "../../lib/formato";
 import { FORMAS_PAGAMENTO, BANDEIRAS, precisaParcelas as precisaParcelasFn, precisaBandeira as precisaBandeiraFn } from "../../lib/formasPagamento";
@@ -51,6 +51,7 @@ function Conteudo() {
   const [selecionado, setSelecionado] = useState(null);
   const [editando, setEditando] = useState(false);
   const [edicao, setEdicao] = useState({});
+  const [motivoOrcamentoConsulta, setMotivoOrcamentoConsulta] = useState("");
   const [erroNumeroOs, setErroNumeroOs] = useState(null);
   const [tiposServicoEdicao, setTiposServicoEdicao] = useState([]);
   const [salvando, setSalvando] = useState(false);
@@ -70,6 +71,7 @@ function Conteudo() {
     }
   }, [linhaFiltro]); // eslint-disable-line react-hooks/exhaustive-deps
   const podeEditar = podeAlterar(usuario.cargo, usuario.linha);
+  const isAdminConsulta = podeAlterarContasAReceber(usuario.cargo);
   const podeEditarData = podeLancarDataRetroativa(usuario.cargo);
   const podeExcluir = podeExcluirLancamento(usuario.cargo);
   const podeExportar = podeExportarConsulta(usuario.cargo);
@@ -229,6 +231,7 @@ function Conteudo() {
     setEditando(false);
     setExcluindo(false);
     setMotivoExclusao("");
+    setMotivoOrcamentoConsulta("");
     setEdicao({
       data: item.data,
       numero_os: item.numero_os,
@@ -308,6 +311,50 @@ function Conteudo() {
     const totalFormas = formasPagamentoEdicao.reduce((s, f) => s + (Number(f.valor) || 0), 0);
     const valorPagoEfetivo = usaMultiplas ? totalFormas : Number(edicao.valor_pago) || 0;
 
+    const orcamentoMudou = Number(edicao.orcamento_aprovado) !== Number(selecionado.orcamento_aprovado);
+    if (orcamentoMudou) {
+      // Se essa OS tem outro(s) lançamento(s) com o mesmo tipo de serviço, o
+      // orçamento é compartilhado entre eles (trava do banco mantém todos
+      // iguais) — uma alteração comum nesse campo é silenciosamente desfeita.
+      // Só dá pra corrigir de verdade via função de admin, que ajusta o grupo
+      // inteiro de uma vez.
+      const { count: outrosNaOs } = await supabase
+        .from("lancamentos")
+        .select("id", { count: "exact", head: true })
+        .eq("unidade_id", selecionado.unidade_id)
+        .eq("numero_os", selecionado.numero_os)
+        .eq("tipo_servico_id", selecionado.tipo_servico_id)
+        .eq("linha", selecionado.linha)
+        .neq("id", selecionado.id);
+
+      if ((outrosNaOs || 0) > 0) {
+        if (!isAdminConsulta) {
+          alert(
+            "Essa OS já tem outro lançamento com o mesmo tipo de serviço, então o orçamento é compartilhado entre eles — mudar aqui não teria efeito. Só o Administrador pode corrigir esse valor (ele ajusta todos os lançamentos dessa OS de uma vez, pra não ficar inconsistente)."
+          );
+          return;
+        }
+        if (!motivoOrcamentoConsulta.trim()) {
+          alert("Essa OS tem outro lançamento com o mesmo tipo de serviço — informe o motivo da correção do orçamento antes de salvar.");
+          return;
+        }
+        setSalvando(true);
+        const { error: erroOrcamento } = await supabase.rpc("admin_corrigir_orcamento_cr", {
+          p_unidade_id: selecionado.unidade_id,
+          p_numero_os: selecionado.numero_os,
+          p_tipo_servico_id: selecionado.tipo_servico_id,
+          p_linha: selecionado.linha,
+          p_novo_orcamento: Number(edicao.orcamento_aprovado),
+          p_motivo: motivoOrcamentoConsulta.trim(),
+        });
+        if (erroOrcamento) {
+          setSalvando(false);
+          alert("Erro ao corrigir o orçamento: " + erroOrcamento.message);
+          return;
+        }
+      }
+    }
+
     setSalvando(true);
     const { error } = await supabase
       .from("lancamentos")
@@ -351,6 +398,7 @@ function Conteudo() {
     setResultados((atual) => atual.map((r) => (r.id === selecionado.id ? { ...r, ...atualizado } : r)));
     setEditando(false);
     setSelecionado(null);
+    setMotivoOrcamentoConsulta("");
   }
 
   function aoSalvarModalFormasEdicao(formas) {
@@ -807,6 +855,28 @@ function Conteudo() {
                 <div>
                   <label className="field-label">Orçamento aprovado <span className="normal-case text-muted">(opcional)</span></label>
                   <CurrencyInput valor={edicao.orcamento_aprovado} onChange={(v) => setEdicao({ ...edicao, orcamento_aprovado: v })} />
+                  {selecionado && Number(edicao.orcamento_aprovado) !== Number(selecionado.orcamento_aprovado) && (
+                    isAdminConsulta ? (
+                      <div className="mt-1.5">
+                        <p className="text-xs text-muted mb-1">
+                          Se essa OS tiver outro lançamento com o mesmo tipo de serviço, o orçamento é
+                          compartilhado — informe o motivo pra corrigir todos juntos.
+                        </p>
+                        <input
+                          type="text"
+                          className="field-input text-xs"
+                          placeholder="Motivo da correção do orçamento"
+                          value={motivoOrcamentoConsulta}
+                          onChange={(e) => setMotivoOrcamentoConsulta(e.target.value)}
+                        />
+                      </div>
+                    ) : (
+                      <p className="text-xs text-amber-700 mt-1.5">
+                        Se essa OS tiver outro lançamento com o mesmo tipo de serviço, só o Administrador
+                        consegue corrigir o orçamento.
+                      </p>
+                    )
+                  )}
                 </div>
                 <div>
                   <label className="field-label">Valor pago</label>
@@ -947,7 +1017,7 @@ function Conteudo() {
               </div>
               <p className="text-xs text-muted">Toda alteração fica registrada no log do sistema para auditoria.</p>
               <div className="flex justify-end gap-2">
-                <button className="btn" onClick={() => setEditando(false)}>Cancelar</button>
+                <button className="btn" onClick={() => { setEditando(false); setMotivoOrcamentoConsulta(""); }}>Cancelar</button>
                 <button className="btn-primary" onClick={salvarEdicao} disabled={salvando}>
                   {salvando ? "Salvando…" : "Salvar alteração"}
                 </button>
