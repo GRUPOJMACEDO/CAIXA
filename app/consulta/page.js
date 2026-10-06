@@ -9,7 +9,7 @@ import FormasPagamentoModal from "../../components/FormasPagamentoModal";
 import { supabase } from "../../lib/supabaseClient";
 import { useSessao } from "../../lib/SessaoContext";
 import { hojeBrasil } from "../../lib/fusoHorario";
-import { podeAlterar, podeExcluirLancamento, podeLancarDataRetroativa, podeExportarConsulta, podeCorrigirOrcamentoCr } from "../../lib/permissions";
+import { podeAlterar, podeExcluirLancamento, podeLancarDataRetroativa, podeExportarConsulta, podeCorrigirOrcamentoCr, podeAlterarContasAReceber } from "../../lib/permissions";
 import { iconeCategoria } from "../../lib/iconesCategoria";
 import { formatarDataBR, formatarMoedaSemSimbolo } from "../../lib/formato";
 import { FORMAS_PAGAMENTO, BANDEIRAS, precisaParcelas as precisaParcelasFn, precisaBandeira as precisaBandeiraFn } from "../../lib/formasPagamento";
@@ -72,6 +72,8 @@ function Conteudo() {
   }, [linhaFiltro]); // eslint-disable-line react-hooks/exhaustive-deps
   const podeEditar = podeAlterar(usuario.cargo, usuario.linha);
   const isAdminConsulta = podeCorrigirOrcamentoCr(usuario.cargo);
+  // Administrador edita lançamento sem nenhuma das travas de integridade
+  const isAdministradorConsulta = podeAlterarContasAReceber(usuario.cargo);
   const podeEditarData = podeLancarDataRetroativa(usuario.cargo);
   const podeExcluir = podeExcluirLancamento(usuario.cargo);
   const podeExportar = podeExportarConsulta(usuario.cargo);
@@ -312,7 +314,7 @@ function Conteudo() {
     const valorPagoEfetivo = usaMultiplas ? totalFormas : Number(edicao.valor_pago) || 0;
 
     const orcamentoMudou = Number(edicao.orcamento_aprovado) !== Number(selecionado.orcamento_aprovado);
-    if (orcamentoMudou) {
+    if (orcamentoMudou && !isAdministradorConsulta) {
       // Se essa OS tem outro(s) lançamento(s) com o mesmo tipo de serviço, o
       // orçamento é compartilhado entre eles (trava do banco mantém todos
       // iguais) — uma alteração comum nesse campo é silenciosamente desfeita.
@@ -356,7 +358,29 @@ function Conteudo() {
     }
 
     setSalvando(true);
-    const { error } = await supabase
+    const formaPagamentoFinal = usaMultiplas ? "MÚLTIPLAS" : (Number(edicao.valor_pago) > 0 ? edicao.forma_pagamento : null);
+    const parcelasFinal = !usaMultiplas && precisaParcelasFn(edicao.forma_pagamento) && edicao.parcelas ? Number(edicao.parcelas) : null;
+    const bandeiraFinal = !usaMultiplas && precisaBandeiraFn(edicao.forma_pagamento) ? edicao.bandeira || null : null;
+    const formasFinal = usaMultiplas ? formasPagamentoEdicao.map(({ id, ...resto }) => resto) : null;
+
+    // Administrador: grava pela função que ignora as travas (tipo de serviço,
+    // categoria, orçamento compartilhado, valor acima do orçamento).
+    const consultaSalvar = isAdministradorConsulta
+      ? supabase.rpc("admin_editar_lancamento", {
+          p_id: selecionado.id,
+          p_data: podeEditarData && edicao.data ? edicao.data : null,
+          p_numero_os: podeEditarData && numeroOsValidado ? numeroOsValidado : null,
+          p_categoria_id: edicao.categoria_id,
+          p_tipo_servico_id: edicao.tipo_servico_id,
+          p_orcamento_aprovado: Number(edicao.orcamento_aprovado) || 0,
+          p_valor_pago: valorPagoEfetivo,
+          p_forma_pagamento: formaPagamentoFinal,
+          p_formas_pagamento: formasFinal,
+          p_parcelas: parcelasFinal,
+          p_bandeira: bandeiraFinal,
+          p_observacoes: edicao.observacoes?.trim() || null,
+        })
+      : supabase
       .from("lancamentos")
       .update({
         ...(podeEditarData && edicao.data ? { data: edicao.data } : {}),
@@ -374,6 +398,7 @@ function Conteudo() {
         alterado_em: new Date().toISOString(),
       })
       .eq("id", selecionado.id);
+    const { error } = await consultaSalvar;
     setSalvando(false);
     if (error) {
       alert(
@@ -856,7 +881,11 @@ function Conteudo() {
                   <label className="field-label">Orçamento aprovado <span className="normal-case text-muted">(opcional)</span></label>
                   <CurrencyInput valor={edicao.orcamento_aprovado} onChange={(v) => setEdicao({ ...edicao, orcamento_aprovado: v })} />
                   {selecionado && Number(edicao.orcamento_aprovado) !== Number(selecionado.orcamento_aprovado) && (
-                    isAdminConsulta ? (
+                    isAdministradorConsulta ? (
+                      <p className="text-xs text-muted mt-1.5">
+                        Como Administrador, a alteração vale só para este lançamento, sem travas.
+                      </p>
+                    ) : isAdminConsulta ? (
                       <div className="mt-1.5">
                         <p className="text-xs text-muted mb-1">
                           Se essa OS tiver outro lançamento com o mesmo tipo de serviço, o orçamento é
