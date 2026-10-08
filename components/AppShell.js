@@ -105,6 +105,7 @@ export function navFinanceiro(cargo) {
   return [
     { href: "/financeiro/taxas-cartao", label: "Taxas do Cartão", icon: CreditCard, descricao: "Tabela de taxas da operadora (débito, crédito e parcelado), com histórico." },
     { href: "/financeiro/dashboard-taxas", label: "Dashboard de Taxas", icon: ChartPie, descricao: "Quanto foi recebido e quanto a operadora desconta em taxas, por unidade." },
+    { href: "/financeiro/graficos", label: "Gráficos", icon: TrendingUp, descricao: "Evolução do recebido, das taxas e do mix de pagamento ao longo do tempo." },
   ];
 }
 
@@ -156,6 +157,7 @@ const CORES_ITEM = {
   "/configuracoes/itens-excluidos": "#2670B5",
   "/financeiro/taxas-cartao": "#2670B5",
   "/financeiro/dashboard-taxas": "#3F8A5C",
+  "/financeiro/graficos": "#C9752E",
 };
 
 const CORES_SECAO = {
@@ -452,7 +454,7 @@ function Shell({ children }) {
             <BotaoModoClaroEscuro topbar />
           </div>
         </header>
-        <main className="p-6 max-w-full overflow-x-hidden">{children}</main>
+        <main className="p-6 max-w-full overflow-x-clip">{children}</main>
       </div>
       <BalaoNotificacoes />
     </div>

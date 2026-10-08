@@ -47,7 +47,7 @@ export default function SeletorSuspenso({ rotulo, icone: Icone, opcoes, selecion
         <ChevronDown size={14} className={`shrink-0 transition-transform ${aberto ? "rotate-180" : ""}`} />
       </button>
       {aberto && (
-        <div className="absolute z-20 mt-1 w-full max-h-64 overflow-y-auto bg-white border border-line rounded-lg shadow-lg">
+        <div className="absolute z-30 mt-1 w-full bg-white border border-line rounded-lg shadow-lg overflow-hidden">
           <div className="flex items-center justify-between px-3 py-1.5 border-b border-line bg-canvas/50">
             <button type="button" className="text-[11px] text-gold hover:underline" onClick={() => onChange(opcoes.map((o) => o.valor))}>
               Selecionar todas
@@ -56,12 +56,15 @@ export default function SeletorSuspenso({ rotulo, icone: Icone, opcoes, selecion
               Limpar
             </button>
           </div>
-          {opcoes.map((o) => (
-            <label key={o.valor} className="flex items-center gap-2 px-3 py-2 text-sm hover:bg-canvas cursor-pointer">
-              <input type="checkbox" checked={selecionados.includes(o.valor)} onChange={() => alternar(o.valor)} />
-              {o.rotulo}
-            </label>
-          ))}
+          {/* lista rola sozinha; o topo (Selecionar todas / Limpar) fica sempre visível */}
+          <div className="max-h-72 overflow-y-auto pb-1">
+            {opcoes.map((o) => (
+              <label key={o.valor} className="flex items-center gap-2 px-3 py-2 text-sm hover:bg-canvas cursor-pointer">
+                <input type="checkbox" checked={selecionados.includes(o.valor)} onChange={() => alternar(o.valor)} />
+                {o.rotulo}
+              </label>
+            ))}
+          </div>
         </div>
       )}
     </div>
