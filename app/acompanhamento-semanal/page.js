@@ -36,12 +36,9 @@ function Conteudo() {
     setCarregando(true);
     const desde = inicioDaSemana(new Date());
     desde.setDate(desde.getDate() - semanas * 7);
+    // fase 60: o banco já devolve a soma por unidade + dia
     buscarTudo(() =>
-      supabase
-        .from("lancamentos")
-        .select("unidade_id, data, valor_pago")
-        .in("unidade_id", selecionadas)
-        .gte("data", desde.toISOString().slice(0, 10))
+      supabase.rpc("valor_pago_por_dia", { unidade_ids: selecionadas, data_inicio: desde.toISOString().slice(0, 10) })
     )
       .then((data) => setLancamentos(data))
       .finally(() => setCarregando(false));

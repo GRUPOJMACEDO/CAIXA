@@ -68,14 +68,21 @@ export default function PainelTV() {
   }, []);
 
   // Realtime: qualquer lançamento novo/alterado atualiza o painel na hora.
+  // fase 60: vários lançamentos seguidos viram UMA atualização só (espera 15 s)
   useEffect(() => {
+    let espera = null;
     const canal = supabase
       .channel("painel-tv-ih-realtime")
       .on("postgres_changes", { event: "*", schema: "public", table: "lancamentos" }, () => {
-        carregar();
+        if (espera) return;
+        espera = setTimeout(() => {
+          espera = null;
+          carregar();
+        }, 15000);
       })
       .subscribe();
     return () => {
+      if (espera) clearTimeout(espera);
       supabase.removeChannel(canal);
     };
   }, []);

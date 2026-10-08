@@ -88,12 +88,9 @@ function Conteudo() {
       return;
     }
     setCarregando(true);
+    // fase 60: o banco já devolve a soma por unidade + dia
     buscarTudo(() =>
-      supabase
-        .from("lancamentos")
-        .select("unidade_id, data, valor_pago")
-        .in("unidade_id", selecionadas)
-        .gte("data", baldes[0].inicioStr)
+      supabase.rpc("valor_pago_por_dia", { unidade_ids: selecionadas, data_inicio: baldes[0].inicioStr })
     )
       .then((data) => setLancamentos(data))
       .finally(() => setCarregando(false));

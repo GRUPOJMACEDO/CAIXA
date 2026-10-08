@@ -22,7 +22,10 @@ export default function SinoSolicitacoesSenha({ usuario }) {
   useEffect(() => {
     if (!podeVerSolicitacoesSenha(usuario.cargo)) return;
     carregar();
-    const intervalo = setInterval(carregar, 60000);
+    const intervalo = setInterval(() => {
+      if (document.visibilityState === "hidden") return; // aba escondida: não consulta (o Realtime continua avisando)
+      carregar();
+    }, 300000); // 5 min (era 1 min) — o Realtime já avisa na hora
     return () => clearInterval(intervalo);
   }, [usuario]); // eslint-disable-line react-hooks/exhaustive-deps
 

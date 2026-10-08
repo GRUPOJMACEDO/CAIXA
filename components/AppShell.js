@@ -259,17 +259,16 @@ function Shell({ children }) {
     if (!usuario || !podeVerDuplicidades(usuario.cargo)) return;
     async function verificar() {
       const unidadeIdsParam = podeVerTodasUnidades(usuario.cargo) ? null : unidades.map((u) => u.id);
-      const { data } = await supabase.rpc("duplicidades_os", { unidade_ids: unidadeIdsParam });
-      if (!data) return;
-      const { data: revisadas } = await supabase.from("duplicidades_revisadas").select("unidade_id, numero_os");
-      const revisadasSet = new Set((revisadas || []).map((r) => `${r.unidade_id}::${r.numero_os}`));
-      const gruposPendentes = new Set(
-        data.filter((d) => !revisadasSet.has(`${d.unidade_id}::${d.numero_os}`)).map((d) => `${d.unidade_id}::${d.numero_os}`)
-      );
-      setContadorDuplicidades(gruposPendentes.size);
+      // fase 60: o banco devolve só o número (antes baixava todos os lançamentos das OS repetidas)
+      const { data, error } = await supabase.rpc("contar_duplicidades_pendentes", { unidade_ids: unidadeIdsParam });
+      if (error || data == null) return;
+      setContadorDuplicidades(Number(data) || 0);
     }
     verificar();
-    const intervalo = setInterval(verificar, 240000); // 4 min (era 45s — reduz consumo de egress)
+    const intervalo = setInterval(() => {
+      if (document.visibilityState === "hidden") return; // aba escondida: não consulta
+      verificar();
+    }, 240000); // 4 min
     return () => clearInterval(intervalo);
   }, [usuario?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 

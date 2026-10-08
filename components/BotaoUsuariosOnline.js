@@ -46,7 +46,10 @@ export default function BotaoUsuariosOnline() {
     enviarSinal();
     verificarOnline().finally(() => setCarregandoInicial(false));
     const intervaloSinal = setInterval(enviarSinal, 60000); // era 40s — reduz consumo de egress
-    const intervaloVerifica = setInterval(verificarOnline, INTERVALO_VERIFICACAO_MS);
+    const intervaloVerifica = setInterval(() => {
+      if (document.visibilityState === "hidden") return; // aba escondida: não consulta
+      verificarOnline();
+    }, INTERVALO_VERIFICACAO_MS);
     return () => {
       clearInterval(intervaloSinal);
       clearInterval(intervaloVerifica);

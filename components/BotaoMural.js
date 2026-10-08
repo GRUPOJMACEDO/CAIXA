@@ -110,7 +110,10 @@ export default function BotaoMural() {
 
   useEffect(() => {
     verificarNaoLidas().finally(() => setCarregandoInicial(false));
-    const intervalo = setInterval(verificarNaoLidas, INTERVALO_VERIFICACAO_MS);
+    const intervalo = setInterval(() => {
+      if (document.visibilityState === "hidden") return; // aba escondida: não consulta (o Realtime continua avisando)
+      verificarNaoLidas();
+    }, INTERVALO_VERIFICACAO_MS);
     return () => clearInterval(intervalo);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
