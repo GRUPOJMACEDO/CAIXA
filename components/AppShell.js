@@ -34,6 +34,9 @@ import {
   Copy,
   Eraser,
   History,
+  Landmark,
+  CreditCard,
+  ChartPie,
 } from "lucide-react";
 import BotaoModoClaroEscuro from "./BotaoModoClaroEscuro";
 import BotaoOutubroRosa from "./BotaoOutubroRosa";
@@ -65,6 +68,7 @@ import {
   podeVerTodasUnidades,
   podeVerPendenciasQuitadas,
   podeAlterarContasAReceber,
+  podeVerFinanceiro,
 } from "../lib/permissions";
 
 export const NAV_OPERACAO = [
@@ -94,6 +98,15 @@ export const NAV_DASHBOARD = [
   { href: "/dashboard/tecnicos", label: "Técnicos", icon: Briefcase, descricao: "Ranking de vendas por técnico, nas unidades IH." },
   { href: "/dashboard/acessorios", label: "Acessórios", icon: Cable, descricao: "Vendas de acessórios por tipo de item." },
 ];
+
+// Menu Financeiro — só Administrador e Diretor (fase 61)
+export function navFinanceiro(cargo) {
+  if (!podeVerFinanceiro(cargo)) return [];
+  return [
+    { href: "/financeiro/taxas-cartao", label: "Taxas do Cartão", icon: CreditCard, descricao: "Tabela de taxas da operadora (débito, crédito e parcelado), com histórico." },
+    { href: "/financeiro/dashboard-taxas", label: "Dashboard de Taxas", icon: ChartPie, descricao: "Quanto foi recebido e quanto a operadora desconta em taxas, por unidade." },
+  ];
+}
 
 export function navConfiguracoes(cargo) {
   const itens = [];
@@ -141,12 +154,15 @@ const CORES_ITEM = {
   "/configuracoes/duplicidades": "#C9752E",
   "/configuracoes/pendencias-quitadas": "#3F8A5C",
   "/configuracoes/itens-excluidos": "#2670B5",
+  "/financeiro/taxas-cartao": "#2670B5",
+  "/financeiro/dashboard-taxas": "#3F8A5C",
 };
 
 const CORES_SECAO = {
   operacao: "#1B3A5C",
   dashboard: "#B8862E",
   configuracoes: "#5B6B84",
+  financeiro: "#2E6B45",
   painel: "#0E7A72",
 };
 
@@ -231,6 +247,7 @@ function secaoDaRota(pathname) {
   if (NAV_OPERACAO.some((i) => i.href === pathname) || pathname === "/operacao" || pathname === "/configuracoes/duplicidades") return "operacao";
   if (NAV_DASHBOARD.some((i) => i.href === pathname)) return "dashboard";
   if (pathname.startsWith("/configuracoes")) return "configuracoes";
+  if (pathname.startsWith("/financeiro")) return "financeiro";
   return null;
 }
 
@@ -283,10 +300,10 @@ function Shell({ children }) {
   const largura = recolhido ? "w-[72px]" : "w-64";
   const itensConfig = navConfiguracoes(usuario.cargo);
   const itensOperacao = [...NAV_OPERACAO, ...navOperacaoExtra(usuario.cargo)];
-  const todosItens = [...itensOperacao, ...NAV_DASHBOARD, ...itensConfig];
+  const todosItens = [...itensOperacao, ...NAV_DASHBOARD, ...navFinanceiro(usuario.cargo), ...itensConfig];
   const tituloAtual =
     todosItens.find((i) => i.href === pathname)?.label ||
-    (pathname === "/operacao" ? "Operação" : pathname === "/configuracoes" ? "Configurações" : "");
+    (pathname === "/operacao" ? "Operação" : pathname === "/configuracoes" ? "Configurações" : pathname === "/financeiro" ? "Financeiro" : "");
 
   function irParaInicio() {
     ignorarProximaAutoAbertura.current = true;
@@ -331,6 +348,21 @@ function Shell({ children }) {
             onToggle={() => setSecaoAberta((s) => (s === "dashboard" ? null : "dashboard"))}
             aoClicarNome={() => setSecaoAberta("dashboard")}
           />
+
+          {podeVerFinanceiro(usuario.cargo) && (
+            <SecaoNav
+              titulo="Financeiro"
+              hrefHub="/financeiro"
+              icone={Landmark}
+              corSecao={CORES_SECAO.financeiro}
+              itens={navFinanceiro(usuario.cargo)}
+              pathname={pathname}
+              recolhido={recolhido}
+              aberta={secaoAberta === "financeiro"}
+              onToggle={() => setSecaoAberta((s) => (s === "financeiro" ? null : "financeiro"))}
+              aoClicarNome={() => setSecaoAberta("financeiro")}
+            />
+          )}
 
           {temAcessoConfiguracoes(usuario.cargo) && (
             <SecaoNav

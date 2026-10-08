@@ -112,7 +112,7 @@ export default function FormasPagamentoModal({ aberto, formasIniciais, onFechar,
                     <label className="field-label">Parcelas</label>
                     <select className="field-input" value={l.parcelas} onChange={(e) => atualizarLinha(l.id, "parcelas", e.target.value)}>
                       <option value="">1x</option>
-                      {[2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
+                      {[2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((n) => (
                         <option key={n} value={n}>{n}x</option>
                       ))}
                     </select>
